@@ -19,6 +19,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
+import { usePortal } from "../context/PortalContext";
 
 const NAV_SECTIONS = [
   {
@@ -47,7 +48,7 @@ const NAV_SECTIONS = [
       { to: "/portal/team", label: "Team", icon: Users },
       { to: "/portal/approvals", label: "Approvals", icon: CheckSquare },
       { to: "/portal/messages", label: "Messages", icon: MessageSquare },
-      { to: "/portal/site-reports", label: "Site Reports", icon: ClipboardList },
+      { to: "/portal/site-reports", label: "Activity Log", icon: ClipboardList },
     ],
   },
   {
@@ -61,6 +62,11 @@ const NAV_SECTIONS = [
 ];
 
 export default function PortalSidebar({ open, onClose }) {
+  const { project } = usePortal();
+
+  // Dynamic Approvals Badge Calculation
+  const pendingApprovalsCount = project?.pending_approvals || 0;
+
   return (
     <>
       {/* Mobile overlay */}
@@ -75,7 +81,7 @@ export default function PortalSidebar({ open, onClose }) {
       <aside
         className={`
           fixed top-0 left-0 z-50 h-full w-[260px] bg-[#0B1220] text-white
-          flex flex-col transition-transform duration-300 ease-out
+          flex flex-col transition-transform duration-300 ease-out font-['Poppins']
           lg:translate-x-0 lg:static lg:z-auto
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -83,7 +89,6 @@ export default function PortalSidebar({ open, onClose }) {
         {/* Brand */}
         <div className="h-16 px-5 flex items-center justify-between border-b border-white/10 shrink-0">
           <Link to="/portal" className="flex items-center gap-2" onClick={onClose}>
-            <img src="/logo/logo.webp" alt="ConstructONS Logo" className="h-8 w-8 object-contain" />
             <span className="font-bold text-base tracking-tight">
               Construct<span className="text-[#FF5A00]">ONS™</span>
             </span>
@@ -99,7 +104,7 @@ export default function PortalSidebar({ open, onClose }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 no-scrollbar">
           {NAV_SECTIONS.map((section) => (
             <div key={section.label}>
               <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/35">
@@ -113,14 +118,26 @@ export default function PortalSidebar({ open, onClose }) {
                       end={item.end}
                       onClick={onClose}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition min-h-[44px] ${isActive
-                          ? "bg-[#FF5A00] text-white shadow-sm"
-                          : "text-white/70 hover:bg-white/5 hover:text-white"
+                        `flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition min-h-[44px] group ${
+                          isActive
+                            ? "bg-[#FF5A00] text-white shadow-sm"
+                            : "text-white/70 hover:bg-white/5 hover:text-white"
                         }`
                       }
                     >
-                      <item.icon className="w-4 h-4 shrink-0" strokeWidth={2} />
-                      <span>{item.label}</span>
+                      <div className="flex items-center gap-3">
+                        <item.icon className={`w-4 h-4 shrink-0 transition ${
+                          window.location.pathname === item.to ? "text-white" : "group-hover:text-[#FF5A00]"
+                        }`} strokeWidth={2} />
+                        <span>{item.label}</span>
+                      </div>
+                      
+                      {/* Approvals Red Badge */}
+                      {item.label === "Approvals" && pendingApprovalsCount > 0 && (
+                        <span className="bg-[#FF2D00] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                          {pendingApprovalsCount}
+                        </span>
+                      )}
                     </NavLink>
                   </li>
                 ))}
@@ -131,10 +148,10 @@ export default function PortalSidebar({ open, onClose }) {
 
         {/* Footer strip */}
         <div className="p-4 border-t border-white/10 shrink-0">
-          <p className="text-[10px] text-white/40 leading-relaxed">
+          <p className="text-[10px] text-white/40 leading-relaxed font-semibold">
             PLAN · BUILD · MONITOR · COMPLETE
           </p>
-          <p className="text-[10px] text-white/25 mt-1">Your Home. Our Commitment.</p>
+          <p className="text-[10px] text-[#FF5A00] mt-1 font-bold">Your Home. Our Commitment.</p>
         </div>
       </aside>
     </>

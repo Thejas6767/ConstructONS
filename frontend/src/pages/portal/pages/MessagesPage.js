@@ -1,6 +1,7 @@
-// MessagesPage.jsx
+import React from "react";
 import ComingSoon from "../components/ComingSoon";
 import { MessageSquare } from "lucide-react";
+
 export default function MessagesPage() {
   return (
     <ComingSoon

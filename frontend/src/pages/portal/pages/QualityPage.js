@@ -1,6 +1,7 @@
-// QualityPage.jsx
+import React from "react";
 import ComingSoon from "../components/ComingSoon";
 import { ShieldCheck } from "lucide-react";
+
 export default function QualityPage() {
   return (
     <ComingSoon

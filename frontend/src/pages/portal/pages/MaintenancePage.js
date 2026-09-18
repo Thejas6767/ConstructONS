@@ -1,6 +1,7 @@
-// MaintenancePage.jsx
+import React from "react";
 import ComingSoon from "../components/ComingSoon";
 import { Wrench } from "lucide-react";
+
 export default function MaintenancePage() {
   return (
     <ComingSoon

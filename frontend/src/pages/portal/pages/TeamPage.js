@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Users, Building2, UserCheck, HardHat, Mail, Search,
-  LayoutGrid, List, Loader2, ArrowRight, UserPlus, Phone,
-  MessageCircle, MoreHorizontal, CheckCircle2, Trash2, Lock, RefreshCw
+  LayoutGrid, List, Loader2, UserPlus, Phone,
+  MessageCircle, CheckCircle2, Trash2, Lock, RefreshCw
 } from "lucide-react";
 import { usePortal } from "../context/PortalContext";
 import { resolveMediaUrl } from "../../../lib/mediaUrl";
@@ -46,17 +46,17 @@ export default function TeamPage() {
   const nameInputRef = useRef(null);
 
   const loadTeam = useCallback(async (isSilent = false) => {
+    if (!project?.id) return;
     if (!isSilent) setRefreshing(true);
     try {
-    // Add project?.id to the query
-const res = await axios.get(`${API_BASE}/portal/my-project/team-data?project_id=${project.id}`, { withCredentials: true });
+      const res = await axios.get(`${API_BASE}/portal/my-project/team-data?project_id=${project.id}`, { withCredentials: true });
       setTeamData(res.data);
     } catch (err) {
       if (!isSilent) toast.error("Failed to sync live team data");
     } finally {
       if (!isSilent) setRefreshing(false);
     }
-  }, []);
+  }, [project?.id]);
 
   useEffect(() => {
     if (!project) return;
@@ -327,7 +327,7 @@ Everything Construction. Always On.`;
                             <CheckCircle2 className={`w-4 h-4 ${(a.member_ids || []).length > 0 ? "text-emerald-500" : "text-[#111111]/30"}`} />
                             <span className="text-xs font-semibold text-[#000F1B]">
                               {new Date(a.date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
-                              {a.date === teamData.date_today && <span className="ml-2 text-[9px] font-bold text-[#FF5A00] uppercase">Today</span>}
+                              {a.date === teamData?.date_today && <span className="ml-2 text-[9px] font-bold text-[#FF5A00] uppercase">Today</span>}
                             </span>
                           </div>
                           <span className="text-xs font-bold text-[#000F1B]">{a.count ?? (a.member_ids || []).length} on site</span>

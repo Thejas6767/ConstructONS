@@ -1,7 +1,4 @@
-/**
- * AdminProjects — admin cockpit for customer projects.
- * Full-width layout, accurate Proposal auto-fill, logistics, Finance, and CCTV.
- */
+
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -10,7 +7,7 @@ import { resolveMediaUrl } from "@/lib/mediaUrl";
 import {
   Plus, Trash2, Save, X, Loader2, RefreshCw, Building2, ClipboardList,
   CheckCircle2, PlayCircle, Circle, Camera, Users, User, Check, CalendarCheck, 
-  FileText, UploadCloud, Package, IndianRupee, Link as LinkIcon, Video
+  FileText, UploadCloud, Package, IndianRupee, Link as LinkIcon, Video,ImageIcon
 } from "lucide-react";
 
 const API_BASE = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000") + "/api";

@@ -188,6 +188,10 @@ class PaymentLogBody(BaseModel):
     reference: Optional[str] = ""
     notes: Optional[str] = ""
 
+class DocumentCreateBody(BaseModel):
+    name: str
+    category: str  # Contracts | Reports | Invoices | Handover | Approvals | General
+    url: str
 
 async def _build_unified_team(proj: dict) -> List[Dict[str, Any]]:
     unified: List[Dict[str, Any]] = []
@@ -887,3 +891,61 @@ async def toggle_camera_status(project_id: str, camera_id: str):
 
     await _log_activity(project_id, "Admin", f"Camera '{cameras[idx]['name']}' marked as {new_status}", "CCTV")
     return {"success": True, "status": new_status}
+@proj_router.post("/admin/projects/{project_id}/documents", dependencies=[Depends(require_admin)])
+async def create_document(project_id: str, body: DocumentCreateBody):
+    p = await db.projects.find_one({"id": project_id}, {"id": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    await db.projects.update_one(
+        {"id": project_id, "$or": [{"documents": {"$exists": False}}, {"documents": None}]},
+        {"$set": {"documents": []}}
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc_entry = {
+        "id": f"doc_{uuid.uuid4().hex[:10]}",
+        "name": body.name.strip(),
+        "category": body.category,
+        "url": body.url,
+        "uploaded_at": now,
+        "uploaded_by": "Admin"
+    }
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$push": {"documents": {"$each": [doc_entry], "$position": 0}}, "$set": {"updated_at": now}}
+    )
+
+    await _log_activity(project_id, "Admin", f"Uploaded Document: {body.name} ({body.category})", "Documents")
+    
+    # 🔔 Notify Client
+    asyncio.create_task(_push_notification(
+        project_id, 
+        "New Document Added", 
+        f"A new document ({body.name}) has been uploaded to your project vault.", 
+        "/portal/documents", 
+        "system"
+    ))
+
+    return {"success": True, "document": doc_entry}
+
+
+@proj_router.delete("/admin/projects/{project_id}/documents/{document_id}", dependencies=[Depends(require_admin)])
+async def delete_document(project_id: str, document_id: str):
+    p = await db.projects.find_one({"id": project_id}, {"id": 1, "documents": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    docs = p.get("documents") or []
+    target = next((d for d in docs if d["id"] == document_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$pull": {"documents": {"id": document_id}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    await _log_activity(project_id, "Admin", f"Deleted Document: {target['name']}", "Documents")
+    return {"success": True}

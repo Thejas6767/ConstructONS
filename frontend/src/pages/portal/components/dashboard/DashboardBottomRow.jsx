@@ -68,7 +68,7 @@ export default function DashboardBottomRow({ project }) {
       </div>
 
       {/* AI Project Assistant */}
-      <div className="rounded-2xl bg-[#000F1B] border border-black/5 p-5 shadow-sm flex flex-col">
+      {/* <div className="rounded-2xl bg-[#000F1B] border border-black/5 p-5 shadow-sm flex flex-col">
         <div className="flex items-center gap-2 text-white mb-4">
           <Bot className="w-5 h-5 text-[#FF5A00]" />
           <h2 className="text-sm font-bold">AI Project Assistant</h2>
@@ -82,7 +82,7 @@ export default function DashboardBottomRow({ project }) {
           <span className="px-3 py-1.5 rounded-lg border border-white/10 text-[9px] text-white/70 font-medium hover:bg-white/10 cursor-pointer transition">What is the next milestone?</span>
           <span className="px-3 py-1.5 rounded-lg border border-white/10 text-[9px] text-white/70 font-medium hover:bg-white/10 cursor-pointer transition">Material delivery status</span>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

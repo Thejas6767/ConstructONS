@@ -5,17 +5,18 @@ export const API_BASE = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 20000,
+  timeout: 30000,
   withCredentials: true,
 });
 
+// Scrub stale localStorage token if present
 try {
   if (typeof localStorage !== "undefined") {
     localStorage.removeItem("cons_admin_token");
   }
 } catch (_) {}
 
-// Only redirect to /admin/login if the user is currently on an /admin URL path
+// Redirect 401s on admin pages only
 const ADMIN_PATH_RE = /^\/(admin|leads$|quiz-submissions|media\/upload|ai\/rewrite|ai\/generate-image|packages\/[^/]+\/versions|custom-quotes|quote-templates|exports|interior-library)/;
 api.interceptors.response.use(
   (r) => r,
@@ -65,7 +66,8 @@ export const customerApi = {
     form.append("category", category);
     return api
       .post("/media/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
+        // DO NOT set "Content-Type": "multipart/form-data" manually!
+        // Axios/Browser automatically generates boundary headers when Content-Type is omitted.
         onUploadProgress: (evt) => {
           if (onProgress && evt.total) onProgress(Math.round((evt.loaded / evt.total) * 100));
         },
@@ -109,7 +111,7 @@ export const adminApi = {
     form.append("category", category);
     return api
       .post("/media/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
+        // DO NOT set "Content-Type": "multipart/form-data" manually!
         onUploadProgress: (evt) => {
           if (onProgress && evt.total) onProgress(Math.round((evt.loaded / evt.total) * 100));
         },

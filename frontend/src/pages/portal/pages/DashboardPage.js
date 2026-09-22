@@ -253,8 +253,9 @@ export default function DashboardPage() {
       <DashboardMetricsRow project={project} />
       
       {/* Row 4: Future Modules (Strictly Locked / Coming Soon) */}
+           {/* Row 4: Future Modules (Rolling out soon) */}
       <div className="pt-6 border-t border-black/5">
-        <h2 className="text-sm font-bold text-[#000F1B] mb-4 px-1">Phase 5 Modules (Rolling out soon)</h2>
+        <h2 className="text-sm font-bold text-[#000F1B] mb-4 px-1"></h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           
           <Link to="/portal/approvals" className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex flex-col items-center justify-center text-center hover:bg-amber-100 transition shadow-sm group relative">
@@ -267,11 +268,18 @@ export default function DashboardPage() {
             <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">Action Center</span>
             <span className="text-[9px] font-bold text-amber-600 mt-1">Pending Approvals</span>
           </Link>
+
+          {/* NEW LIVE DOCUMENTS WIDGET */}
+          <Link to="/portal/documents" className="rounded-xl border border-black/10 bg-white p-4 flex flex-col items-center justify-center text-center hover:bg-[#F2F2F2] transition shadow-sm group">
+            <FileText className="w-5 h-5 text-purple-600 mb-2 group-hover:scale-110 transition" />
+            <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">Document Vault</span>
+            <span className="text-[9px] font-bold text-[#111111]/50 mt-1">{(project?.documents || []).length} Files</span>
+          </Link>
           
-          <LockedModule title="Quality Control" icon={ShieldCheck} />
-          <LockedModule title="Document Vault" icon={FileText} />
+          {/* <LockedModule title="Quality Control" icon={ShieldCheck} />
+          <LockedModule title="Maintenance" icon={Building2} />
           <LockedModule title="AI Assistant" icon={Bot} />
-          
+           */}
         </div>
       </div>
 

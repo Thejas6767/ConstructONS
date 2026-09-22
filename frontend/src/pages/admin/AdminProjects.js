@@ -6,8 +6,8 @@ import { adminApi } from "@/lib/api";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import {
   Plus, Trash2, Save, X, Loader2, RefreshCw, Building2, ClipboardList,
-  CheckCircle2, PlayCircle, Circle, Camera, Users, User, Check, CalendarCheck, 
-  FileText, UploadCloud, Package, IndianRupee, Link as LinkIcon, Video,ImageIcon
+  CheckCircle2, PlayCircle, Circle, Camera, Users, User, Check, CalendarCheck,
+  FileText, UploadCloud, Package, IndianRupee, Link as LinkIcon, Video, ImageIcon,FolderOpen
 } from "lucide-react";
 
 const API_BASE = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000") + "/api";
@@ -20,11 +20,11 @@ const PR = {
   remove: (id) => api.delete(`/admin/projects/${id}`).then(r => r.data),
   patchStage: (id, index, body) => api.patch(`/admin/projects/${id}/stages/${index}`, body).then(r => r.data),
   update: (id, body) => api.put(`/admin/projects/${id}`, body).then(r => r.data),
-  
+
   createDrawing: (id, body) => api.post(`/admin/projects/${id}/drawings`, body).then(r => r.data),
   reviseDrawing: (id, drawingId, body) => api.post(`/admin/projects/${id}/drawings/${drawingId}/revision`, body).then(r => r.data),
   removeDrawing: (id, drawingId) => api.delete(`/admin/projects/${id}/drawings/${drawingId}`).then(r => r.data),
-  
+
   createMaterial: (id, body) => api.post(`/admin/projects/${id}/materials`, body).then(r => r.data),
   updateMaterial: (id, materialId, body) => api.put(`/admin/projects/${id}/materials/${materialId}`, body).then(r => r.data),
   removeMaterial: (id, materialId) => api.delete(`/admin/projects/${id}/materials/${materialId}`).then(r => r.data),
@@ -36,21 +36,26 @@ const PR = {
   updateCamera: (id, camId, body) => api.put(`/admin/projects/${id}/cameras/${camId}`, body).then(r => r.data),
   removeCamera: (id, camId) => api.delete(`/admin/projects/${id}/cameras/${camId}`).then(r => r.data),
   toggleCameraStatus: (id, camId) => api.patch(`/admin/projects/${id}/cameras/${camId}/status`).then(r => r.data),
+
+  // Documents
+  createDocument: (id, body) => api.post(`/admin/projects/${id}/documents`, body).then(r => r.data),
+  removeDocument: (id, docId) => api.delete(`/admin/projects/${id}/documents/${docId}`).then(r => r.data),
 };
 
 export default function AdminProjects() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  
+
   const [editing, setEditing] = useState(null);
   const [assigningTeam, setAssigningTeam] = useState(null);
   const [markingAttendance, setMarkingAttendance] = useState(null);
   const [managingDrawings, setManagingDrawings] = useState(null);
   const [managingMaterials, setManagingMaterials] = useState(null);
-  const [managingFinance, setManagingFinance] = useState(null); 
+  const [managingFinance, setManagingFinance] = useState(null);
   const [managingCctv, setManagingCctv] = useState(null);
   const [editInfo, setEditInfo] = useState(null);
+  const [managingDocs, setManagingDocs] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,11 +105,11 @@ export default function AdminProjects() {
             const dwgCount = (p.drawings || []).length;
             const matCount = (p.materials || []).length;
             const cctvCount = (p.cctv_cameras || []).length;
-            
+
             return (
               <div key={p.id} className="rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-md transition flex flex-col" data-testid={`proj-row-${p.id}`}>
                 <div className="p-6 flex-1 flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-                  
+
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1.5">
                       {p.project_code && (
@@ -117,7 +122,7 @@ export default function AdminProjects() {
                       </span>
                     </div>
                     <div className="font-bold text-[#000F1B] text-xl truncate">{p.title}</div>
-                    
+
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 mt-3">
                       <div>
                         <div className="text-[9px] uppercase tracking-wider text-[#111111]/40 font-bold mb-0.5">Client Contact</div>
@@ -143,11 +148,11 @@ export default function AdminProjects() {
                   </div>
 
                 </div>
-                
+
                 <div className="h-1.5 bg-[#F2F2F2] w-full relative">
                   <div className="absolute top-0 left-0 h-full bg-[#FF5A00] transition-all" style={{ width: `${pct}%` }} />
                 </div>
-                
+
                 <div className="p-4 bg-[#F9FAFB] border-t border-black/5 rounded-b-2xl flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => setEditing(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 w-16">
@@ -166,6 +171,10 @@ export default function AdminProjects() {
                       <FileText className="w-4 h-4 text-indigo-600" />
                       <span className="text-[10px] font-bold">Draw ({dwgCount})</span>
                     </button>
+                    <button onClick={() => setManagingDocs(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-[#F9FAFB] hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
+                      <FolderOpen className="w-4 h-4 text-purple-600" />
+                      <span className="text-[10px] font-bold">Docs ({(p.documents || []).length})</span>
+                    </button>
                     <button onClick={() => setManagingMaterials(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
                       <Package className="w-4 h-4 text-amber-500" />
                       <span className="text-[10px] font-bold">Mats ({matCount})</span>
@@ -180,7 +189,7 @@ export default function AdminProjects() {
                       <span className="text-[10px] font-bold">CCTV ({cctvCount})</span>
                     </button>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <button onClick={() => setEditInfo(p)} className="text-[10px] font-bold text-[#111111]/50 hover:text-[#000F1B] transition uppercase tracking-wider">
                       Edit Info
@@ -204,10 +213,12 @@ export default function AdminProjects() {
       {managingDrawings && <DrawingsManagerModal project={managingDrawings} onClose={() => setManagingDrawings(null)} onSaved={() => { load(); }} />}
       {managingMaterials && <MaterialsManagerModal project={managingMaterials} onClose={() => setManagingMaterials(null)} onSaved={() => { load(); }} />}
       {managingFinance && <FinanceManagerModal project={managingFinance} onClose={() => setManagingFinance(null)} onSaved={() => { load(); }} />}
-      
+
       {/* CCTV MODAL */}
       {managingCctv && <CctvManagerModal project={managingCctv} onClose={() => setManagingCctv(null)} onSaved={() => { load(); }} />}
+    {managingDocs && <DocsManagerModal project={managingDocs} onClose={() => setManagingDocs(null)} onSaved={() => { load(); }} />}
     </div>
+
   );
 }
 
@@ -218,12 +229,12 @@ function CctvManagerModal({ project, onClose, onSaved }) {
   const [cameras, setCameras] = useState(project.cctv_cameras || []);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ name: "", camera_type: "youtube", url: "", status: "online", location_label: "" });
 
-  const fetchProject = async () => { 
-    try { const p = await PR.get(project.id); setCameras(p.cctv_cameras || []); onSaved(); } catch {} 
+  const fetchProject = async () => {
+    try { const p = await PR.get(project.id); setCameras(p.cctv_cameras || []); onSaved(); } catch { }
   };
 
   const openNew = () => {
@@ -245,7 +256,7 @@ function CctvManagerModal({ project, onClose, onSaved }) {
       if (editId) await PR.updateCamera(project.id, editId, payload);
       else await PR.addCamera(project.id, payload);
       toast.success("Camera saved"); setShowForm(false); await fetchProject();
-    } catch(err) { toast.error(err?.response?.data?.detail || "Failed to save camera"); } 
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save camera"); }
     finally { setLoading(false); }
   };
 
@@ -286,13 +297,13 @@ function CctvManagerModal({ project, onClose, onSaved }) {
               <h3 className="text-sm font-bold text-[#000F1B] mb-5">{editId ? "Edit Camera Stream" : "Connect New Camera Feed"}</h3>
               <form onSubmit={saveCamera} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Camera Name *</label><input type="text" required value={form.name} onChange={e=>setForm({...form, name: e.target.value})} placeholder="e.g. Front Gate Camera" className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Location / Zone</label><input type="text" value={form.location_label} onChange={e=>setForm({...form, location_label: e.target.value})} placeholder="e.g. Material Yard" className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-medium focus:ring-2 focus:ring-red-500 outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Stream Type *</label><select value={form.camera_type} onChange={e=>setForm({...form, camera_type: e.target.value})} className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none cursor-pointer"><option value="youtube">YouTube Live Embed</option><option value="iframe">Web Iframe Embed</option><option value="hls">HLS Stream (.m3u8)</option></select></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Status</label><select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none cursor-pointer"><option value="online">Online</option><option value="offline">Offline</option><option value="maintenance">Maintenance</option></select></div>
-                  <div className="sm:col-span-2"><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Stream / Embed URL *</label><input type="url" required value={form.url} onChange={e=>setForm({...form, url: e.target.value})} placeholder="https://..." className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-mono focus:ring-2 focus:ring-red-500 outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Camera Name *</label><input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Front Gate Camera" className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Location / Zone</label><input type="text" value={form.location_label} onChange={e => setForm({ ...form, location_label: e.target.value })} placeholder="e.g. Material Yard" className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-medium focus:ring-2 focus:ring-red-500 outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Stream Type *</label><select value={form.camera_type} onChange={e => setForm({ ...form, camera_type: e.target.value })} className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none cursor-pointer"><option value="youtube">YouTube Live Embed</option><option value="iframe">Web Iframe Embed</option><option value="hls">HLS Stream (.m3u8)</option></select></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none cursor-pointer"><option value="online">Online</option><option value="offline">Offline</option><option value="maintenance">Maintenance</option></select></div>
+                  <div className="sm:col-span-2"><label className="block text-[10px] font-bold uppercase mb-1 text-[#000F1B]">Stream / Embed URL *</label><input type="url" required value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://..." className="w-full px-3 py-2.5 border border-black/10 rounded-xl bg-white text-xs font-mono focus:ring-2 focus:ring-red-500 outline-none" /></div>
                 </div>
-                
+
                 <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl mt-2">
                   <p className="text-[10px] font-semibold text-blue-800 leading-relaxed">
                     <strong>Tip:</strong> If using YouTube, provide the embed URL (e.g. <code>https://www.youtube.com/embed/VIDEO_ID?autoplay=1&mute=1</code>). If your NVR outputs HLS, ensure the URL ends in <code>.m3u8</code>.
@@ -314,15 +325,15 @@ function CctvManagerModal({ project, onClose, onSaved }) {
                   <div className="flex justify-between items-start mb-4 border-b border-black/5 pb-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl ${c.status === 'online' ? 'bg-red-50 border border-red-100 text-red-500' : 'bg-gray-100 border border-gray-200 text-gray-400'} grid place-items-center shrink-0`}>
-                         <Video className="w-5 h-5" />
+                        <Video className="w-5 h-5" />
                       </div>
                       <div>
                         <h4 className="font-bold text-[#000F1B] text-sm">{c.name}</h4>
                         <p className="text-[10px] text-[#111111]/50">{c.location_label || "No zone specified"} • {c.camera_type.toUpperCase()}</p>
                       </div>
                     </div>
-                    
-                    <button 
+
+                    <button
                       onClick={() => toggleStatus(c.id)}
                       className={`flex items-center gap-1.5 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider border transition ${c.status === 'online' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
                       title="Click to toggle status"
@@ -331,11 +342,11 @@ function CctvManagerModal({ project, onClose, onSaved }) {
                       {c.status}
                     </button>
                   </div>
-                  
+
                   <div className="bg-[#F5F6F8] p-3 rounded-lg text-[9px] font-mono text-[#111111]/40 truncate mb-4">
                     {c.url}
                   </div>
-                  
+
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => openEdit(c)} className="px-3 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-bold hover:bg-[#000F1B] hover:text-white transition">Edit</button>
                     <button onClick={() => deleteCam(c.id)} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">Remove</button>
@@ -359,10 +370,10 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
   const [savingSettings, setSavingSettings] = useState(false);
   const [projData, setProjData] = useState(project);
 
-  const [form, setForm] = useState({ 
-    title: project.title || "", 
-    address: project.address || "", 
-    contract_value: project.contract_value || 0 
+  const [form, setForm] = useState({
+    title: project.title || "",
+    address: project.address || "",
+    contract_value: project.contract_value || 0
   });
 
   const [paymentForm, setPaymentForm] = useState({
@@ -380,10 +391,10 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
   const saveBaseSettings = async () => {
     setSavingSettings(true);
     try {
-      await PR.update(project.id, { 
-        title: form.title, 
-        address: form.address, 
-        contract_value: Number(form.contract_value) || 0 
+      await PR.update(project.id, {
+        title: form.title,
+        address: form.address,
+        contract_value: Number(form.contract_value) || 0
       });
       toast.success("Project settings updated");
       await fetchProject();
@@ -437,7 +448,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Project Settings Block */}
             <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm">
@@ -445,15 +456,15 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Project Title</label>
-                  <input value={form.title} onChange={e=>setForm({...form, title: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+                  <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full px-3 py-2 border rounded-xl" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Site Address</label>
-                  <input value={form.address} onChange={e=>setForm({...form, address: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+                  <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="w-full px-3 py-2 border rounded-xl" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Total Contract Value (₹)</label>
-                  <input type="number" value={form.contract_value} onChange={e=>setForm({...form, contract_value: e.target.value})} className="w-full px-3 py-2 border rounded-xl font-bold text-[#10B981]" />
+                  <input type="number" value={form.contract_value} onChange={e => setForm({ ...form, contract_value: e.target.value })} className="w-full px-3 py-2 border rounded-xl font-bold text-[#10B981]" />
                 </div>
                 <button onClick={saveBaseSettings} disabled={savingSettings} className="w-full bg-[#000F1B] text-white rounded-xl py-2 text-xs font-bold">
                   {savingSettings ? "Saving..." : "Update Settings"}
@@ -466,7 +477,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               <div className="absolute top-0 left-0 w-full h-1.5 bg-[#FF5A00]" />
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 mb-6">Financial Summary</h3>
-                
+
                 <div className="space-y-4">
                   <div className="flex justify-between items-end border-b border-white/10 pb-3">
                     <span className="text-sm font-semibold text-white/70">Contract Value</span>
@@ -491,15 +502,15 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
             <form onSubmit={savePayment} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1 text-emerald-600">Amount Received (₹) *</label>
-                <input type="number" required value={paymentForm.amount} onChange={e=>setPaymentForm({...paymentForm, amount: e.target.value})} className="w-full px-3 py-2 border border-emerald-200 bg-emerald-50 rounded-xl font-bold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input type="number" required value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="w-full px-3 py-2 border border-emerald-200 bg-emerald-50 rounded-xl font-bold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Date *</label>
-                <input type="date" required value={paymentForm.date} onChange={e=>setPaymentForm({...paymentForm, date: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+                <input type="date" required value={paymentForm.date} onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })} className="w-full px-3 py-2 border rounded-xl" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Method *</label>
-                <select value={paymentForm.method} onChange={e=>setPaymentForm({...paymentForm, method: e.target.value})} className="w-full px-3 py-2 border rounded-xl">
+                <select value={paymentForm.method} onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })} className="w-full px-3 py-2 border rounded-xl">
                   <option>Bank Transfer</option>
                   <option>UPI</option>
                   <option>Cheque</option>
@@ -508,7 +519,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Txn / Ref No.</label>
-                <input type="text" value={paymentForm.reference} onChange={e=>setPaymentForm({...paymentForm, reference: e.target.value})} className="w-full px-3 py-2 border rounded-xl" placeholder="e.g. UTR12345" />
+                <input type="text" value={paymentForm.reference} onChange={e => setPaymentForm({ ...paymentForm, reference: e.target.value })} className="w-full px-3 py-2 border rounded-xl" placeholder="e.g. UTR12345" />
               </div>
               <button type="submit" disabled={loading} className="w-full bg-[#10B981] hover:bg-emerald-600 text-white rounded-xl py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <IndianRupee className="w-4 h-4" />} Log Receipt
@@ -562,8 +573,8 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
 // 1. CREATE PROJECT MODAL (With True Proposal Auto-fill)
 // ------------------------------------------------------------------
 function CreateProjectModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ 
-    customer_email: "", customer_name: "", title: "My Home Project", address: "", contract_value: 0 
+  const [form, setForm] = useState({
+    customer_email: "", customer_name: "", title: "My Home Project", address: "", contract_value: 0
   });
   const [saving, setSaving] = useState(false);
   const [proposals, setProposals] = useState([]);
@@ -593,7 +604,7 @@ function CreateProjectModal({ onClose, onCreated }) {
     const baseCost = (Number(p.built_up_area) || 0) * (Number(p.package_price_per_sqft) || 0);
     const addonsCost = (p.addons_selected || []).reduce((sum, a) => sum + (Number(a.price) || 0), 0);
     const discount = Number(p.discount_amount) || 0;
-    
+
     // True Grand Total
     const trueTotal = baseCost + addonsCost - discount;
 
@@ -626,7 +637,7 @@ function CreateProjectModal({ onClose, onCreated }) {
     <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
       <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative overflow-hidden" data-testid="proj-create-modal">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-[#FF5A00]" />
-        
+
         <div className="flex items-center justify-between mb-2">
           <div className="font-bold text-[#000F1B] text-xl">New Project Tracker</div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 grid place-items-center text-[#000F1B] transition"><X className="w-4 h-4" /></button>
@@ -664,17 +675,17 @@ function CreateProjectModal({ onClose, onCreated }) {
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Project Title</label>
               <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Kumar Residence" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm font-bold text-[#000F1B] focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
             </div>
-            
+
             <div>
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Client Google Email *</label>
               <input type="email" value={form.customer_email} onChange={e => setForm({ ...form, customer_email: e.target.value })} placeholder="client@gmail.com" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
             </div>
-            
+
             <div>
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Client Name</label>
               <input value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} placeholder="e.g. Rajesh Kumar" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
             </div>
-            
+
             <div>
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Site Address</label>
               <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Plot / City" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
@@ -686,7 +697,7 @@ function CreateProjectModal({ onClose, onCreated }) {
             </div>
           </div>
         </div>
-        
+
         <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-black/10 bg-white px-5 py-2.5 text-xs font-semibold text-[#000F1B] hover:bg-[#F2F2F2] transition">Cancel</button>
           <button onClick={create} disabled={saving} className="inline-flex items-center gap-1.5 rounded-xl bg-[#000F1B] hover:bg-[#FF5A00] text-white px-6 py-2.5 text-sm font-bold transition shadow-sm disabled:opacity-60">
@@ -702,9 +713,9 @@ function CreateProjectModal({ onClose, onCreated }) {
 // Edit Basic Info Modal (Now includes Amount Paid)
 // ------------------------------------------------------------------
 function EditInfoModal({ project, onClose, onSaved }) {
-  const [form, setForm] = useState({ 
-    title: project.title || "", 
-    address: project.address || "", 
+  const [form, setForm] = useState({
+    title: project.title || "",
+    address: project.address || "",
     contract_value: project.contract_value || 0,
     amount_spent: project.amount_spent || 0 // New field for Client Payments
   });
@@ -713,10 +724,10 @@ function EditInfoModal({ project, onClose, onSaved }) {
   const save = async () => {
     setSaving(true);
     try {
-      await PR.update(project.id, { 
-        ...form, 
+      await PR.update(project.id, {
+        ...form,
         contract_value: Number(form.contract_value) || 0,
-        amount_spent: Number(form.amount_spent) || 0 
+        amount_spent: Number(form.amount_spent) || 0
       });
       toast.success("Project financials updated");
       onSaved();
@@ -732,7 +743,7 @@ function EditInfoModal({ project, onClose, onSaved }) {
           <div className="font-bold text-[#000F1B] text-lg">Project Details & Finances</div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 grid place-items-center text-[#000F1B] transition"><X className="w-4 h-4" /></button>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Project Title</label>
@@ -753,7 +764,7 @@ function EditInfoModal({ project, onClose, onSaved }) {
             </div>
           </div>
         </div>
-        
+
         <div className="mt-6 flex items-center justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-black/10 bg-white px-5 py-2.5 text-xs font-semibold text-[#000F1B] hover:bg-[#F2F2F2] transition">Cancel</button>
           <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-xl bg-[#000F1B] hover:bg-[#FF5A00] text-white px-6 py-2.5 text-sm font-bold transition shadow-sm disabled:opacity-60">
@@ -774,12 +785,12 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  
+
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ category: "Structure", item_name: "", brand: "", grade_spec: "", quantity: "", unit: "Nos", unit_price: "", status: "ordered", payment_status: "pending", photo_url: "", notes: "" });
 
-  const fetchProject = async () => { 
-    try { const p = await PR.get(project.id); setMaterials(p.materials || []); onSaved(); } catch {} 
+  const fetchProject = async () => {
+    try { const p = await PR.get(project.id); setMaterials(p.materials || []); onSaved(); } catch { }
   };
 
   const openNew = () => {
@@ -803,14 +814,14 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
       toast.success("Material saved"); setShowForm(false); await fetchProject();
     } catch { toast.error("Failed to save"); } finally { setLoading(false); }
   };
-  
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]; if (!file) return; setUploading(true);
-    try { 
-      const res = await adminApi.uploadImage(file, "materials"); 
-      setForm(prev => ({ ...prev, photo_url: res.url })); 
+    try {
+      const res = await adminApi.uploadImage(file, "materials");
+      setForm(prev => ({ ...prev, photo_url: res.url }));
       toast.success("Photo attached!");
-    } 
+    }
     catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
   };
 
@@ -836,20 +847,20 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
               <h3 className="text-sm font-bold text-[#000F1B] mb-5">{editId ? "Edit Material Details" : "Log New Material Order"}</h3>
               <form onSubmit={saveMaterial} className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-2"><label className="block text-[10px] font-bold uppercase mb-1">Item Name *</label><input type="text" required value={form.item_name} onChange={e=>setForm({...form, item_name: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl bg-[#F9FAFB] focus:bg-white" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Category</label><select value={form.category} onChange={e=>setForm({...form, category: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl"><option>Structure</option><option>Flooring</option><option>Electrical</option><option>Plumbing</option><option>Finishes</option></select></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Brand</label><input type="text" value={form.brand} onChange={e=>setForm({...form, brand: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl" placeholder="e.g. UltraTech" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Unit Price (₹)</label><input type="number" required value={form.unit_price} onChange={e=>setForm({...form, unit_price: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Quantity</label><input type="number" required value={form.quantity} onChange={e=>setForm({...form, quantity: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Status</label><select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl font-bold text-amber-600"><option value="ordered">Ordered</option><option value="delivered">Delivered</option><option value="inspected">Inspected</option><option value="installed">Installed</option></select></div>
-                  <div><label className="block text-[10px] font-bold uppercase mb-1">Payment</label><select value={form.payment_status} onChange={e=>setForm({...form, payment_status: e.target.value})} className="w-full px-3 py-2.5 border rounded-xl"><option value="pending">Pending</option><option value="paid">Paid</option></select></div>
-                  
+                  <div className="md:col-span-2"><label className="block text-[10px] font-bold uppercase mb-1">Item Name *</label><input type="text" required value={form.item_name} onChange={e => setForm({ ...form, item_name: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl bg-[#F9FAFB] focus:bg-white" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Category</label><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl"><option>Structure</option><option>Flooring</option><option>Electrical</option><option>Plumbing</option><option>Finishes</option></select></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Brand</label><input type="text" value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl" placeholder="e.g. UltraTech" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Unit Price (₹)</label><input type="number" required value={form.unit_price} onChange={e => setForm({ ...form, unit_price: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Quantity</label><input type="number" required value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl font-bold text-amber-600"><option value="ordered">Ordered</option><option value="delivered">Delivered</option><option value="inspected">Inspected</option><option value="installed">Installed</option></select></div>
+                  <div><label className="block text-[10px] font-bold uppercase mb-1">Payment</label><select value={form.payment_status} onChange={e => setForm({ ...form, payment_status: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl"><option value="pending">Pending</option><option value="paid">Paid</option></select></div>
+
                   {/* Photo Uploader */}
                   <div className="md:col-span-2 flex items-center gap-4 bg-white border border-black/10 rounded-xl p-3">
                     {form.photo_url ? (
                       <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-black/10">
                         <img src={resolveMediaUrl(form.photo_url)} alt="" className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => setForm({...form, photo_url: ""})} className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white grid place-items-center rounded-bl-lg"><X className="w-3 h-3" /></button>
+                        <button type="button" onClick={() => setForm({ ...form, photo_url: "" })} className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white grid place-items-center rounded-bl-lg"><X className="w-3 h-3" /></button>
                       </div>
                     ) : (
                       <div className="w-12 h-12 rounded-lg bg-[#F2F2F2] grid place-items-center"><ImageIcon className="w-5 h-5 text-[#111111]/30" /></div>
@@ -876,7 +887,7 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
                   <div className="flex justify-between items-start mb-3 border-b border-black/5 pb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 overflow-hidden shrink-0">
-                         {m.photo_url ? <img src={resolveMediaUrl(m.photo_url)} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-amber-500 m-2.5" />}
+                        {m.photo_url ? <img src={resolveMediaUrl(m.photo_url)} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-amber-500 m-2.5" />}
                       </div>
                       <div>
                         <h4 className="font-bold text-[#000F1B] text-sm">{m.item_name}</h4>
@@ -885,10 +896,10 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
                     </div>
                     <span className="text-[9px] uppercase tracking-wider font-bold bg-[#F2F2F2] px-2 py-1 rounded-md">{m.status}</span>
                   </div>
-                  
+
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => openEdit(m)} className="px-3 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-bold hover:bg-[#000F1B] hover:text-white transition">Edit</button>
-                    <button onClick={() => { if(window.confirm("Delete?")) { PR.removeMaterial(project.id, m.id).then(fetchProject); } }} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">Delete</button>
+                    <button onClick={() => { if (window.confirm("Delete?")) { PR.removeMaterial(project.id, m.id).then(fetchProject); } }} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">Delete</button>
                   </div>
                 </div>
               ))}
@@ -979,7 +990,7 @@ function StagesEditor({ project, onClose, onSaved }) {
                   </div>
                   <div className="flex items-end">
                     <label className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-[#F2F2F2] px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-black/5 transition">
-                      {uploading === idx ? <Loader2 className="w-4 h-4 animate-spin text-[#FF5A00]" /> : <Camera className="w-4 h-4 text-[#FF5A00]" />} 
+                      {uploading === idx ? <Loader2 className="w-4 h-4 animate-spin text-[#FF5A00]" /> : <Camera className="w-4 h-4 text-[#FF5A00]" />}
                       <span>Upload Photo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={e => uploadPhoto(idx, e.target.files?.[0])} />
                     </label>
@@ -1151,7 +1162,7 @@ function DrawingsManagerModal({ project, onClose, onSaved }) {
   const [revisingId, setRevisingId] = useState(null);
 
   const fetchProject = async () => {
-    try { const p = await PR.get(project.id); setDrawings(p.drawings || []); onSaved(); } catch {}
+    try { const p = await PR.get(project.id); setDrawings(p.drawings || []); onSaved(); } catch { }
   };
   const handleUploadNew = async (e) => {
     const file = e.target.files?.[0]; if (!file || !newTitle.trim()) return;
@@ -1219,6 +1230,125 @@ function DrawingsManagerModal({ project, onClose, onSaved }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ------------------------------------------------------------------
+// DOCUMENTS MANAGER MODAL (Phase 5)
+// ------------------------------------------------------------------
+function DocsManagerModal({ project, onClose, onSaved }) {
+  const [documents, setDocuments] = useState(project.documents || []);
+  const [uploading, setUploading] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newCategory, setNewCategory] = useState("Contracts");
+
+  const fetchProject = async () => {
+    try {
+      const p = await PR.get(project.id);
+      setDocuments(p.documents || []);
+      onSaved();
+    } catch { toast.error("Failed to refresh documents"); }
+  };
+
+  const handleUploadNew = async (e) => {
+    const file = e.target.files?.[0]; 
+    if (!file) return;
+    if (!newTitle.trim()) { toast.error("Enter a document title"); e.target.value = ""; return; }
+    
+    setUploading(true);
+    try {
+      const res = await adminApi.uploadImage(file, "documents");
+      await PR.createDocument(project.id, { name: newTitle.trim(), category: newCategory, url: res.url });
+      toast.success("Document uploaded & Client notified!");
+      setNewTitle(""); 
+      await fetchProject();
+    } catch { 
+      toast.error("Upload failed"); 
+    } finally { 
+      setUploading(false); e.target.value = ""; 
+    }
+  };
+
+  const handleDelete = async (docId) => {
+    if (!window.confirm("Permanently delete this document from the vault?")) return;
+    try {
+      await PR.removeDocument(project.id, docId);
+      toast.success("Document deleted");
+      await fetchProject();
+    } catch { toast.error("Failed to delete document"); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
+      <div className="bg-[#F5F6F8] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="p-5 border-b border-black/5 flex items-center justify-between bg-white">
+          <div>
+            <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Document Vault</div>
+            <div className="font-bold text-[#000F1B] text-base">{project.title}</div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="bg-white rounded-xl border border-black/5 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-[#000F1B] mb-3">Upload New Document</h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+              <div className="flex-1 w-full">
+                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Document Title</label>
+                <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Signed Contract V1" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none" />
+              </div>
+              <div className="w-full sm:w-48">
+                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Category</label>
+                <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none">
+                  <option>Contracts</option>
+                  <option>Reports</option>
+                  <option>Invoices</option>
+                  <option>Handover</option>
+                  <option>Approvals</option>
+                  <option>General</option>
+                </select>
+              </div>
+              <label className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#000F1B] text-white px-5 py-2 text-sm font-semibold transition min-h-[40px] cursor-pointer hover:bg-[#FF5A00]`}>
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                <span>Upload PDF / IMG</span>
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUploadNew} disabled={!newTitle.trim() || uploading} />
+              </label>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-[#000F1B] px-1">Vault Files ({documents.length})</h3>
+            {documents.length === 0 ? (
+              <div className="text-center py-10 text-xs text-[#111111]/50 italic bg-white rounded-xl border border-black/5">No documents uploaded to this project yet.</div>
+            ) : (
+              documents.map(d => (
+                <div key={d.id} className="bg-white rounded-xl border border-black/5 shadow-sm p-4 flex justify-between items-center group hover:border-[#FF5A00]/50 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#F5F6F8] grid place-items-center shrink-0">
+                      <FileText className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-[#000F1B]">{d.name}</h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold text-[#FF5A00] uppercase tracking-wider">{d.category}</span>
+                        <span className="text-[10px] text-[#111111]/40">• {new Date(d.uploaded_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                    <a href={resolveMediaUrl(d.url)} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-600 hover:text-white transition">
+                      View
+                    </a>
+                    <button onClick={() => handleDelete(d.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center hover:bg-red-600 hover:text-white transition">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

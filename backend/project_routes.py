@@ -81,6 +81,8 @@ async def _log_activity(project_id: str, user_name: str, action: str, module: st
     )
 
 
+from email_service import send_project_notification_email
+
 async def _push_notification(project_id: str, title: str, message: str, link: str, icon_type: str = "general"):
     await db.projects.update_one(
         {"id": project_id, "$or": [{"notifications": {"$exists": False}}, {"notifications": None}]},
@@ -96,6 +98,22 @@ async def _push_notification(project_id: str, title: str, message: str, link: st
         {"$push": {"notifications": {"$each": [notif], "$slice": -50, "$sort": {"timestamp": -1}}}},
     )
 
+    # 📧 Email Integration: Fetch project customer info and dispatch email notification
+    try:
+        proj = await db.projects.find_one({"id": project_id}, {"customer_email": 1, "customer_name": 1, "title": 1})
+        if proj and proj.get("customer_email"):
+            asyncio.create_task(
+                send_project_notification_email(
+                    to_email=proj.get("customer_email"),
+                    customer_name=proj.get("customer_name") or "",
+                    project_title=proj.get("title") or "My Home Project",
+                    notification_title=title,
+                    notification_message=message,
+                    portal_link=link
+                )
+            )
+    except Exception as e:
+        logger.warning(f"Failed to schedule email notification for project {project_id}: {e}")
 
 # ---------------- Schemas ----------------
 class ProjectCreateBody(BaseModel):

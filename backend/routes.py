@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Form, Response, Header, Request
 from fastapi.responses import Response as FastAPIResponse
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import logging
-from pydantic import BaseModel, Field
-from ai_service import chat_public_gemini, chat_portal_gemini
+import asyncio
+
 from db import db, serialize_doc
 from auth import (
     require_admin, verify_admin_credentials, create_admin_token,
@@ -23,6 +23,8 @@ from customer_auth import (
     GoogleAuthBody, process_google_auth, get_current_customer,
     logout_customer as _logout_customer, CustomerProfileUpdate,
 )
+
+from ai_service import chat_public_gemini, chat_portal_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -457,7 +459,7 @@ async def del_quiz_submission(id: str):
     return await delete_doc("quiz_submissions", id)
 
 
-# ----------------------- Real-time notifications (UPDATED) -----------------------
+# ----------------------- Real-time notifications -----------------------
 @router.get("/notifications/pending", dependencies=[Depends(require_admin)])
 async def notifications_pending(since: Optional[str] = None):
     from datetime import timedelta
@@ -470,17 +472,14 @@ async def notifications_pending(since: Optional[str] = None):
         since_dt = datetime.now(timezone.utc) - timedelta(hours=24)
     since_iso = since_dt.isoformat()
 
-    # 1. Leads
     leads = await db.leads.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
 
-    # 2. Quizzes
     quizzes = await db.quiz_submissions.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
 
-    # 3. Client portal actions (tickets, drawing approvals, material decisions, etc.)
     recent_projects = await db.projects.find(
         {"activities.timestamp": {"$gt": since_iso}},
         {"id": 1, "title": 1, "project_code": 1, "activities": 1}
@@ -516,7 +515,6 @@ async def notifications_pending(since: Optional[str] = None):
             "link": "/admin/quiz-submissions",
         })
 
-    # Client actions: only non-admin users (Client / Project Owner / team members)
     client_actions = 0
     admin_markers = ("admin", "site engineer", "system", "procurement", "accounts", "quality team")
 
@@ -527,9 +525,7 @@ async def notifications_pending(since: Optional[str] = None):
                 continue
             user_name = (act.get("user_name") or "").strip()
             user_l = user_name.lower()
-            # Skip pure admin/system noise
             if any(m in user_l for m in admin_markers) and "client" not in user_l:
-                # Still allow if action text is clearly client-side
                 action_l = (act.get("action") or "").lower()
                 if not any(k in action_l for k in (
                     "raised maintenance", "approved drawing", "rejected drawing",
@@ -558,6 +554,73 @@ async def notifications_pending(since: Optional[str] = None):
         "quiz_count": len(quizzes),
         "client_actions_count": client_actions,
     }
+
+
+# ----------------------- AI Chatbot Endpoints -----------------------
+class PublicChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+class PortalChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+
+@router.post("/ai/chat/public")
+async def public_ai_chat(body: PublicChatRequest, request: Request):
+    """Public Website AI Chatbot (ConstructONS AI Assist)."""
+    from project_routes import apply_rate_limit
+    apply_rate_limit(request, limit=10, window_sec=60)
+
+    reply = await chat_public_gemini(body.message, body.history)
+    return {"reply": reply}
+
+
+@router.post("/ai/chat/portal")
+async def portal_ai_chat(body: PortalChatRequest, customer=Depends(get_current_customer)):
+    """Authenticated Portal Project Advisor with live project context."""
+    email = (customer.get("email") or "").lower()
+    
+    proj = await db.projects.find_one(
+        {"$or": [{"customer_email": email}, {"team_directory.email": email}]},
+        {"_id": 0}
+    )
+    
+    if not proj:
+        raise HTTPException(status_code=404, detail="No linked active project found for this account.")
+
+    context = {
+        "title": proj.get("title"),
+        "project_code": proj.get("project_code"),
+        "status": proj.get("status"),
+        "address": proj.get("address"),
+        "start_date": proj.get("start_date"),
+        "expected_completion": proj.get("expected_completion"),
+        "contract_value": proj.get("contract_value"),
+        "amount_spent": proj.get("amount_spent"),
+        "stages": [
+            {"name": s.get("name"), "status": s.get("status"), "progress_pct": s.get("progress_pct"), "expected_date": s.get("expected_date")}
+            for s in (proj.get("stages") or [])
+        ],
+        "pending_drawings": [
+            {"title": d.get("name"), "category": d.get("category"), "version": d.get("current_version")}
+            for d in (proj.get("drawings") or []) if d.get("status") == "pending"
+        ],
+        "pending_materials": [
+            {"item_name": m.get("item_name"), "category": m.get("category")}
+            for m in (proj.get("materials") or []) if m.get("status") == "pending"
+        ],
+        "quality_inspections_count": len(proj.get("quality_inspections") or []),
+        "recent_activities": [
+            {"action": a.get("action"), "module": a.get("module"), "time": a.get("timestamp")}
+            for a in (proj.get("activities") or [])[:5]
+        ],
+        "warranty_active": proj.get("warranty_active", False),
+        "warranty_years": proj.get("warranty_years", 0)
+    }
+
+    reply = await chat_portal_gemini(body.message, context, body.history)
+    return {"reply": reply}
 
 
 # ----------------------- Generic factory for simpler collections -----------------------
@@ -837,6 +900,75 @@ async def _generate_cq_ref_number() -> str:
     return f"{prefix}{seq:04d}"
 
 
+AI_JOBS: Dict[str, Dict[str, Any]] = {}
+
+async def _run_ai_quote_job(job_id: str, payload: dict):
+    from ai_service import suggest_custom_quote
+    try:
+        res = await suggest_custom_quote(payload)
+        if res:
+            AI_JOBS[job_id] = {"status": "done", "result": res}
+        else:
+            AI_JOBS[job_id] = {"status": "error", "error": "AI failed to generate quote."}
+    except Exception as e:
+        logger.error(f"[AI Job Error] {e}", exc_info=True)
+        AI_JOBS[job_id] = {"status": "error", "error": str(e)}
+
+
+@router.post("/custom-quotes/ai-suggest", dependencies=[Depends(require_admin)])
+async def ai_suggest_custom_quote(request: Request):
+    """Start an async AI Custom Quote generation job."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    if body.get("package_slug") and not body.get("base_package"):
+        pkg = await db.packages.find_one({"slug": body["package_slug"]}, {"_id": 0})
+        if pkg:
+            body["base_package"] = pkg
+
+    job_id = new_id()
+    AI_JOBS[job_id] = {"status": "processing"}
+    asyncio.create_task(_run_ai_quote_job(job_id, body))
+    return {"job_id": job_id}
+
+
+@router.get("/custom-quotes/ai-suggest/{job_id}", dependencies=[Depends(require_admin)])
+async def ai_suggest_custom_quote_status(job_id: str):
+    """Poll status of an AI Custom Quote generation job."""
+    job = AI_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.post("/custom-quotes/preview", dependencies=[Depends(require_admin)])
+async def preview_custom_quote_pdf(request: Request):
+    """Generate live PDF preview bytes for custom quote builder."""
+    try:
+        doc = await request.json()
+    except Exception:
+        doc = {}
+    settings = await db.site_settings.find_one({"id": "site_settings"}, {"_id": 0}) or {}
+    
+    try:
+        from custom_quote_pdf import generate_custom_quote_pdf
+        pdf_bytes = generate_custom_quote_pdf(doc, settings)
+    except Exception as e:
+        logger.error(f"[Custom Quote PDF Preview Error] {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to render preview: {e}")
+
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="preview.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/custom-quotes", dependencies=[Depends(require_admin)])
 async def list_custom_quotes(status: Optional[str] = None):
     q: Dict[str, Any] = {}
@@ -844,14 +976,6 @@ async def list_custom_quotes(status: Optional[str] = None):
         q["status"] = status
     cursor = db.custom_quotes.find(q, {"_id": 0}).sort("created_at", -1).limit(200)
     return await cursor.to_list(200)
-
-
-@router.get("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
-async def get_custom_quote(quote_id: str):
-    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Custom quote not found")
-    return doc
 
 
 @router.post("/custom-quotes", dependencies=[Depends(require_admin)])
@@ -867,6 +991,14 @@ async def create_custom_quote(body: CustomQuote):
     await db.custom_quotes.insert_one(data)
     data.pop("_id", None)
     return data
+
+
+@router.get("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
+async def get_custom_quote(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    return doc
 
 
 @router.put("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
@@ -891,6 +1023,80 @@ async def delete_custom_quote(quote_id: str):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Custom quote not found")
     return {"success": True}
+
+
+@router.get("/custom-quotes/{quote_id}/pdf", dependencies=[Depends(require_admin)])
+async def download_custom_quote_pdf(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    settings = await db.site_settings.find_one({"id": "site_settings"}, {"_id": 0}) or {}
+    
+    try:
+        from custom_quote_pdf import generate_custom_quote_pdf
+        pdf_bytes = generate_custom_quote_pdf(doc, settings)
+    except Exception as e:
+        logger.error(f"[Custom Quote PDF Error] {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {e}")
+
+    filename = f"{(doc.get('ref_number') or 'quote').replace('/', '_')}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/custom-quotes/{quote_id}/public-link", dependencies=[Depends(require_admin)])
+async def generate_public_link(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    
+    token = doc.get("public_token") or new_id()
+    await db.custom_quotes.update_one({"id": quote_id}, {"$set": {"public_token": token, "updated_at": now_iso()}})
+    return {"public_token": token}
+
+
+@router.post("/custom-quotes/{quote_id}/save-as-template", dependencies=[Depends(require_admin)])
+async def save_quote_as_template(quote_id: str, request: Request):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    tpl = {
+        "id": new_id(),
+        "name": body.get("name") or doc.get("package_name") or "Saved Template",
+        "description": body.get("description") or "",
+        "price_per_sqft": doc.get("price_per_sqft") or 0,
+        "warranty_years": doc.get("warranty_years") or 10,
+        "spec_categories": doc.get("spec_categories") or [],
+        "addons": doc.get("addons") or [],
+        "line_items": doc.get("line_items") or [],
+        "scope_of_work": doc.get("scope_of_work") or [],
+        "exclusions": doc.get("exclusions") or [],
+        "payment_schedule": doc.get("payment_schedule") or [],
+        "terms": doc.get("terms") or "",
+        "intro_note": doc.get("intro_note") or "",
+        "gst_percent": 0,
+        "service_charge_percent": doc.get("service_charge_percent") or 15,
+        "interiors": doc.get("interiors") or [],
+        "tags": body.get("tags") or [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    
+    await db.quote_templates.insert_one(tpl)
+    tpl.pop("_id", None)
+    return tpl
 
 
 # ============================================================================
@@ -1030,79 +1236,3 @@ async def _snapshot_package(package_id: str, note: str = "edit"):
         "data": current,
     }
     await db.package_versions.insert_one(snap)
-    # Keep only latest N versions per package
-    cursor = db.package_versions.find(
-        {"package_id": package_id}, {"id": 1}
-    ).sort("snapshot_at", -1).skip(MAX_VERSIONS_PER_PACKAGE)
-    old_ids = [d["id"] async for d in cursor]
-    if old_ids:
-        await db.package_versions.delete_many({"id": {"$in": old_ids}})
-
-
-class PublicChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=1000)
-    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
-
-class PortalChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=1000)
-    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
-
-
-@router.post("/ai/chat/public")
-async def public_ai_chat(body: PublicChatRequest, request: Request):
-    """Public Website AI Chatbot (ConstructONS AI Assist)."""
-    # Rate limit public chat: 10 requests per minute
-    from project_routes import apply_rate_limit
-    apply_rate_limit(request, limit=10, window_sec=60)
-
-    reply = await chat_public_gemini(body.message, body.history)
-    return {"reply": reply}
-
-
-@router.post("/ai/chat/portal")
-async def portal_ai_chat(body: PortalChatRequest, customer=Depends(get_current_customer)):
-    """Authenticated Portal Project Advisor with live project context."""
-    email = (customer.get("email") or "").lower()
-    
-    # Fetch customer's active project for context
-    proj = await db.projects.find_one(
-        {"$or": [{"customer_email": email}, {"team_directory.email": email}]},
-        {"_id": 0}
-    )
-    
-    if not proj:
-        raise HTTPException(status_code=404, detail="No linked active project found for this account.")
-
-    # Sanitize project context for AI (Client-safe fields only)
-    context = {
-        "title": proj.get("title"),
-        "project_code": proj.get("project_code"),
-        "status": proj.get("status"),
-        "address": proj.get("address"),
-        "start_date": proj.get("start_date"),
-        "expected_completion": proj.get("expected_completion"),
-        "contract_value": proj.get("contract_value"),
-        "amount_spent": proj.get("amount_spent"),
-        "stages": [
-            {"name": s.get("name"), "status": s.get("status"), "progress_pct": s.get("progress_pct"), "expected_date": s.get("expected_date")}
-            for s in (proj.get("stages") or [])
-        ],
-        "pending_drawings": [
-            {"title": d.get("name"), "category": d.get("category"), "version": d.get("current_version")}
-            for d in (proj.get("drawings") or []) if d.get("status") == "pending"
-        ],
-        "pending_materials": [
-            {"item_name": m.get("item_name"), "category": m.get("category")}
-            for m in (proj.get("materials") or []) if m.get("status") == "pending"
-        ],
-        "quality_inspections_count": len(proj.get("quality_inspections") or []),
-        "recent_activities": [
-            {"action": a.get("action"), "module": a.get("module"), "time": a.get("timestamp")}
-            for a in (proj.get("activities") or [])[:5]
-        ],
-        "warranty_active": proj.get("warranty_active", False),
-        "warranty_years": proj.get("warranty_years", 0)
-    }
-
-    reply = await chat_portal_gemini(body.message, context, body.history)
-    return {"reply": reply}

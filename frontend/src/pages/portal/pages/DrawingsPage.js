@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { 
   PencilRuler, 
-  FileText, 
   CheckCircle2, 
   XCircle, 
   AlertCircle, 
@@ -9,8 +8,10 @@ import {
   Search, 
   Maximize2,
   X,
-  Send,
-  Loader2
+  Loader2,
+  History,
+  FileText,
+  ExternalLink
 } from "lucide-react";
 import { usePortal } from "../context/PortalContext";
 import { resolveMediaUrl } from "../../../lib/mediaUrl";
@@ -58,7 +59,7 @@ export default function DrawingsPage() {
       toast.success(`Drawing marked as ${decision.replace("_", " ")}`);
       setSelectedDrawing(null);
       setDecisionComment("");
-      reload(true); // Silent reload to fetch updated drawings
+      reload(true); // Refresh portal data
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Failed to submit decision");
     } finally {
@@ -77,7 +78,7 @@ export default function DrawingsPage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#000F1B] tracking-tight">Project Drawings</h1>
-            <p className="text-sm text-[#111111]/60 mt-0.5">Review, approve, and track revisions for all architectural and structural plans.</p>
+            <p className="text-sm text-[#111111]/60 mt-0.5">Review, approve, and track visual revisions for all architectural and structural plans.</p>
           </div>
         </div>
       </div>
@@ -129,7 +130,7 @@ export default function DrawingsPage() {
         )}
       </div>
 
-      {/* 4. Decision Modal */}
+      {/* 4. Decision & History Modal */}
       {selectedDrawing && (
         <DecisionModal 
           drawing={selectedDrawing} 
@@ -153,16 +154,16 @@ function DrawingCard({ drawing, onSelect }) {
   const needsChanges = drawing.status === "changes_required";
   const isRejected = drawing.status === "rejected";
 
-  const latestVersion = drawing.versions[drawing.versions.length - 1];
+  const versions = drawing.versions || [];
+  const latestVersion = versions[versions.length - 1] || {};
   const url = resolveMediaUrl(latestVersion.url);
   
-  // Decide badge colors
   let BadgeIcon = Clock; let bg = "bg-amber-50"; let text = "text-amber-600"; let border = "border-amber-200";
   if (isApproved) { BadgeIcon = CheckCircle2; bg = "bg-emerald-50"; text = "text-emerald-700"; border = "border-emerald-200"; }
   if (needsChanges) { BadgeIcon = AlertCircle; bg = "bg-blue-50"; text = "text-blue-700"; border = "border-blue-200"; }
   if (isRejected) { BadgeIcon = XCircle; bg = "bg-red-50"; text = "text-red-600"; border = "border-red-200"; }
 
-  const formattedDate = new Date(latestVersion.uploaded_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' });
+  const formattedDate = latestVersion.uploaded_at ? new Date(latestVersion.uploaded_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }) : "—";
 
   return (
     <div className={`bg-white rounded-2xl border ${isPending ? "border-amber-300 ring-1 ring-amber-300 shadow-md" : "border-black/5 shadow-sm"} overflow-hidden flex flex-col group transition hover:-translate-y-1 hover:shadow-lg`}>
@@ -203,7 +204,7 @@ function DrawingCard({ drawing, onSelect }) {
             {formattedDate}
           </span>
           <button onClick={onSelect} className={`text-[10px] font-bold uppercase tracking-wider hover:underline ${isPending ? "text-[#FF5A00]" : "text-[#000F1B]"}`}>
-            {isPending ? "Action Required →" : "View File"}
+            {isPending ? "Action Required →" : "View & History"}
           </button>
         </div>
       </div>
@@ -212,18 +213,28 @@ function DrawingCard({ drawing, onSelect }) {
 }
 
 function DecisionModal({ drawing, onClose, onDecide, comment, setComment, submitting }) {
-  const isPending = drawing.status === "pending";
-  const latestVersion = drawing.versions[drawing.versions.length - 1];
-  const url = resolveMediaUrl(latestVersion.url);
+  const versions = drawing.versions || [];
+  const [selectedVersionNum, setSelectedVersionNum] = useState(drawing.current_version);
+
+  const activeVersion = versions.find(v => v.version === selectedVersionNum) || versions[versions.length - 1] || {};
+  const isViewingLatest = selectedVersionNum === drawing.current_version;
+  const isPending = drawing.status === "pending" && isViewingLatest;
+  const activeUrl = resolveMediaUrl(activeVersion.url);
 
   return (
     <div className="fixed inset-0 bg-[#000F1B]/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 font-['Poppins']">
-      <div className="bg-white rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
+        {/* Modal Top Header */}
         <div className="p-4 sm:p-5 border-b border-black/5 flex items-center justify-between shrink-0 bg-[#F9FAFB]">
-          <div>
-            <div className="text-[10px] font-bold text-[#FF5A00] uppercase tracking-wider">Drawing Review (V{drawing.current_version})</div>
-            <h2 className="text-lg font-bold text-[#000F1B] mt-0.5">{drawing.name}</h2>
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-bold text-white bg-[#000F1B] px-3 py-1 rounded-lg uppercase tracking-wider">
+              V{activeVersion.version || drawing.current_version}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#000F1B] leading-tight">{drawing.name}</h2>
+              <span className="text-xs text-[#111111]/50 font-medium">{drawing.category} Category</span>
+            </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full grid place-items-center hover:bg-black/5 text-[#000F1B] transition">
             <X className="w-5 h-5" />
@@ -231,24 +242,27 @@ function DecisionModal({ drawing, onClose, onDecide, comment, setComment, submit
         </div>
 
         <div className="flex-1 overflow-y-auto flex flex-col md:flex-row bg-[#F2F2F2]">
-          {/* Main Image Viewer */}
-          <div className="flex-1 p-4 grid place-items-center">
-            <a href={url} target="_blank" rel="noreferrer" className="block max-w-full max-h-full rounded-xl overflow-hidden shadow-sm border border-black/10 relative group">
-              <img src={url} alt={drawing.name} className="max-h-[60vh] md:max-h-[70vh] object-contain bg-white" />
+          
+          {/* Main Image Canvas */}
+          <div className="flex-1 p-4 grid place-items-center relative">
+            <a href={activeUrl} target="_blank" rel="noreferrer" className="block max-w-full max-h-full rounded-xl overflow-hidden shadow-sm border border-black/10 relative group">
+              <img src={activeUrl} alt={drawing.name} className="max-h-[60vh] md:max-h-[70vh] object-contain bg-white" />
               <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 shadow-lg">
-                <Maximize2 className="w-3.5 h-3.5" /> Click to open full size
+                <Maximize2 className="w-3.5 h-3.5" /> Click to view full scale
               </div>
             </a>
           </div>
 
-          {/* Sidebar Panel */}
-          <div className="w-full md:w-80 bg-white border-l border-black/5 shrink-0 flex flex-col">
-            <div className="p-5 flex-1 overflow-y-auto space-y-5">
+          {/* Sidebar / Version History Log */}
+          <div className="w-full md:w-96 bg-white border-l border-black/5 shrink-0 flex flex-col">
+            
+            <div className="p-5 flex-1 overflow-y-auto space-y-6">
               
+              {/* Overall Status Badge */}
               <div>
-                <h3 className="text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-2">Current Status</h3>
+                <h3 className="text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-2">Current Overall Status</h3>
                 <span className={`inline-block px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border ${
-                  isPending ? "bg-amber-50 text-amber-600 border-amber-200" :
+                  drawing.status === "pending" ? "bg-amber-50 text-amber-600 border-amber-200" :
                   drawing.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                   drawing.status === "changes_required" ? "bg-blue-50 text-blue-700 border-blue-200" :
                   "bg-red-50 text-red-600 border-red-200"
@@ -257,52 +271,80 @@ function DecisionModal({ drawing, onClose, onDecide, comment, setComment, submit
                 </span>
               </div>
 
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between border-b border-black/5 py-2">
-                  <span className="text-[#111111]/50 font-semibold">Category</span>
-                  <span className="font-bold text-[#000F1B]">{drawing.category}</span>
+              {/* Version History Visual Timeline */}
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-3">
+                  <History className="w-4 h-4 text-[#FF5A00]" /> Version Log ({versions.length})
                 </div>
-                <div className="flex justify-between border-b border-black/5 py-2">
-                  <span className="text-[#111111]/50 font-semibold">Version</span>
-                  <span className="font-bold text-[#000F1B]">V{drawing.current_version}</span>
-                </div>
-                <div className="flex justify-between border-b border-black/5 py-2">
-                  <span className="text-[#111111]/50 font-semibold">Uploaded</span>
-                  <span className="font-bold text-[#000F1B]">{new Date(latestVersion.uploaded_at).toLocaleDateString()}</span>
+
+                <div className="space-y-3">
+                  {[...versions].reverse().map((v) => {
+                    const isSelected = v.version === selectedVersionNum;
+                    const vUrl = resolveMediaUrl(v.url);
+                    const vDate = v.uploaded_at ? new Date(v.uploaded_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' }) : "";
+
+                    return (
+                      <div 
+                        key={v.version} 
+                        onClick={() => setSelectedVersionNum(v.version)}
+                        className={`p-3 rounded-2xl border transition cursor-pointer flex gap-3 ${
+                          isSelected 
+                            ? "bg-[#FF5A00]/5 border-[#FF5A00] ring-1 ring-[#FF5A00]/30 shadow-sm" 
+                            : "bg-white border-black/10 hover:border-black/20 hover:bg-[#FAFAFA]"
+                        }`}
+                      >
+                        {/* Thumbnail */}
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-[#F2F2F2] border border-black/10 shrink-0 relative">
+                          <img src={vUrl} alt={`V${v.version}`} className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[8px] font-bold text-center py-0.5">
+                            V{v.version}
+                          </span>
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#000F1B]">
+                              Version {v.version} {v.version === drawing.current_version && "(Latest)"}
+                            </span>
+                            <span className="text-[10px] font-semibold text-[#111111]/40">{vDate}</span>
+                          </div>
+
+                          {v.client_decision ? (
+                            <span className={`inline-block w-max px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              v.client_decision === "approved" ? "bg-emerald-100 text-emerald-700" :
+                              v.client_decision === "changes_required" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {v.client_decision.replace("_", " ")}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-amber-600 uppercase">Pending Review</span>
+                          )}
+
+                          {v.client_comment && (
+                            <p className="text-[10px] text-[#111111]/70 italic truncate mt-1">
+                              "{v.client_comment}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Version History / Client Comments Log */}
-              {drawing.current_version > 1 && (
-                <div>
-                  <h3 className="text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-3">Revision History</h3>
-                  <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-black/10 ml-1">
-                    {[...drawing.versions].reverse().slice(1).map((v) => (
-                      <div key={v.version} className="relative pl-6">
-                        <div className="absolute left-1.5 top-1 w-1.5 h-1.5 rounded-full bg-[#111111]/30 ring-4 ring-white" />
-                        <div className="text-[10px] font-bold text-[#111111]/40 mb-0.5">Version {v.version}</div>
-                        {v.client_comment && (
-                          <div className="p-2.5 rounded-lg bg-[#F5F6F8] border border-black/5 text-[10px] text-[#111111]/70 leading-relaxed italic">
-                            "{v.client_comment}"
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-            
-            {/* Action Bar (Only shows if pending approval) */}
+
+            {/* Action Bar for Client Decision (Only on Latest Pending Version) */}
             {isPending ? (
               <div className="p-5 border-t border-black/5 bg-[#F9FAFB]">
-                <h3 className="text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-3 text-center">Your Decision</h3>
+                <h3 className="text-xs font-bold text-[#000F1B] uppercase tracking-wider mb-2 text-center">Your Decision for V{drawing.current_version}</h3>
                 
                 <textarea 
                   value={comment}
                   onChange={e => setComment(e.target.value)}
                   placeholder="Add a comment (required if requesting changes)..."
-                  className="w-full h-20 px-3 py-2 text-xs rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-[#FF5A00] resize-none mb-4"
+                  className="w-full h-20 px-3 py-2 text-xs rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-[#FF5A00] resize-none mb-3 bg-white"
                 />
 
                 <div className="grid grid-cols-2 gap-2 mb-2">
@@ -327,16 +369,19 @@ function DecisionModal({ drawing, onClose, onDecide, comment, setComment, submit
                   className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Approve Drawing
+                  Approve Drawing V{drawing.current_version}
                 </button>
               </div>
             ) : (
-              <div className="p-5 border-t border-black/5 bg-[#F9FAFB] text-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-50" />
-                <p className="text-xs font-semibold text-[#111111]/50">This drawing has been reviewed and closed for edits.</p>
+              <div className="p-4 border-t border-black/5 bg-[#F9FAFB] text-center">
+                <span className="text-xs font-semibold text-[#111111]/50">
+                  {!isViewingLatest ? `Viewing historical Version V${selectedVersionNum}` : "Drawing decision recorded."}
+                </span>
               </div>
             )}
+
           </div>
+
         </div>
       </div>
     </div>

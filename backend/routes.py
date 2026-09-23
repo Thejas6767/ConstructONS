@@ -4,7 +4,8 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import logging
-
+from pydantic import BaseModel, Field
+from ai_service import chat_public_gemini, chat_portal_gemini
 from db import db, serialize_doc
 from auth import (
     require_admin, verify_admin_credentials, create_admin_token,
@@ -102,11 +103,6 @@ async def admin_reseed():
 # ============================================================================
 # Customer Auth & Profile Settings
 # ============================================================================
-from customer_auth import (
-    GoogleAuthBody, process_google_auth, get_current_customer,
-    logout_customer as _logout_customer, CustomerProfileUpdate
-)
-
 @router.post("/customer/auth/google")
 async def customer_process_google(body: GoogleAuthBody, response: FastAPIResponse):
     """Authenticate customer directly using Google ID token credential."""
@@ -461,7 +457,7 @@ async def del_quiz_submission(id: str):
     return await delete_doc("quiz_submissions", id)
 
 
-# ----------------------- Real-time notifications -----------------------
+# ----------------------- Real-time notifications (UPDATED) -----------------------
 @router.get("/notifications/pending", dependencies=[Depends(require_admin)])
 async def notifications_pending(since: Optional[str] = None):
     from datetime import timedelta
@@ -474,14 +470,24 @@ async def notifications_pending(since: Optional[str] = None):
         since_dt = datetime.now(timezone.utc) - timedelta(hours=24)
     since_iso = since_dt.isoformat()
 
+    # 1. Leads
     leads = await db.leads.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
+
+    # 2. Quizzes
     quizzes = await db.quiz_submissions.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
 
+    # 3. Client portal actions (tickets, drawing approvals, material decisions, etc.)
+    recent_projects = await db.projects.find(
+        {"activities.timestamp": {"$gt": since_iso}},
+        {"id": 1, "title": 1, "project_code": 1, "activities": 1}
+    ).to_list(50)
+
     items = []
+
     for l in leads:
         subtitle_parts = [l.get("phone", "")]
         if l.get("interested_home"):
@@ -491,12 +497,13 @@ async def notifications_pending(since: Optional[str] = None):
         items.append({
             "type": "lead",
             "id": l.get("id"),
-            "title": f"New lead — {l.get('name','Unknown')}",
+            "title": f"New lead — {l.get('name', 'Unknown')}",
             "subtitle": " · ".join([p for p in subtitle_parts if p]),
             "created_at": l.get("created_at"),
             "source": l.get("source"),
             "link": "/admin/leads",
         })
+
     for q in quizzes:
         contact = q.get("contact_name") or "Anonymous"
         pkg = q.get("recommended_package_name") or "—"
@@ -509,12 +516,47 @@ async def notifications_pending(since: Optional[str] = None):
             "link": "/admin/quiz-submissions",
         })
 
+    # Client actions: only non-admin users (Client / Project Owner / team members)
+    client_actions = 0
+    admin_markers = ("admin", "site engineer", "system", "procurement", "accounts", "quality team")
+
+    for p in recent_projects:
+        for act in (p.get("activities") or []):
+            ts = act.get("timestamp") or ""
+            if ts <= since_iso:
+                continue
+            user_name = (act.get("user_name") or "").strip()
+            user_l = user_name.lower()
+            # Skip pure admin/system noise
+            if any(m in user_l for m in admin_markers) and "client" not in user_l:
+                # Still allow if action text is clearly client-side
+                action_l = (act.get("action") or "").lower()
+                if not any(k in action_l for k in (
+                    "raised maintenance", "approved drawing", "rejected drawing",
+                    "requested changes", "approved material", "rejected material",
+                    "joined the project",
+                )):
+                    continue
+
+            client_actions += 1
+            proj_label = p.get("project_code") or p.get("title") or "Project"
+            items.append({
+                "type": "project_action",
+                "id": act.get("id") or f"{p.get('id')}-{ts}",
+                "title": f"Client action — {proj_label}",
+                "subtitle": f"{user_name}: {act.get('action') or 'Updated project'}",
+                "created_at": ts,
+                "link": "/admin/projects",
+            })
+
     items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
     return {
-        "items": items,
+        "items": items[:50],
         "now": datetime.now(timezone.utc).isoformat(),
         "leads_count": len(leads),
         "quiz_count": len(quizzes),
+        "client_actions_count": client_actions,
     }
 
 
@@ -540,7 +582,6 @@ def make_crud(path: str, collection: str, ModelCls):
 
     @router.delete(f"/{path}/{{id}}", dependencies=[Depends(require_admin)])
     async def _delete(id: str):
-        # For media, support both CMS media items and uploaded storage records.
         if collection == "media":
             upload = await db.media_uploads.find_one({"id": id}, {"_id": 0})
             if upload:
@@ -952,6 +993,8 @@ async def upload_media(file: UploadFile = File(...), category: str = Form("gener
         "content_type": ct,
         "original_filename": file.filename,
     }
+
+
 # ----------------------- Media Download -----------------------
 @router.get("/media/{path:path}")
 async def download_media(path: str):
@@ -987,3 +1030,79 @@ async def _snapshot_package(package_id: str, note: str = "edit"):
         "data": current,
     }
     await db.package_versions.insert_one(snap)
+    # Keep only latest N versions per package
+    cursor = db.package_versions.find(
+        {"package_id": package_id}, {"id": 1}
+    ).sort("snapshot_at", -1).skip(MAX_VERSIONS_PER_PACKAGE)
+    old_ids = [d["id"] async for d in cursor]
+    if old_ids:
+        await db.package_versions.delete_many({"id": {"$in": old_ids}})
+
+
+class PublicChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+class PortalChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+
+@router.post("/ai/chat/public")
+async def public_ai_chat(body: PublicChatRequest, request: Request):
+    """Public Website AI Chatbot (ConstructONS AI Assist)."""
+    # Rate limit public chat: 10 requests per minute
+    from project_routes import apply_rate_limit
+    apply_rate_limit(request, limit=10, window_sec=60)
+
+    reply = await chat_public_gemini(body.message, body.history)
+    return {"reply": reply}
+
+
+@router.post("/ai/chat/portal")
+async def portal_ai_chat(body: PortalChatRequest, customer=Depends(get_current_customer)):
+    """Authenticated Portal Project Advisor with live project context."""
+    email = (customer.get("email") or "").lower()
+    
+    # Fetch customer's active project for context
+    proj = await db.projects.find_one(
+        {"$or": [{"customer_email": email}, {"team_directory.email": email}]},
+        {"_id": 0}
+    )
+    
+    if not proj:
+        raise HTTPException(status_code=404, detail="No linked active project found for this account.")
+
+    # Sanitize project context for AI (Client-safe fields only)
+    context = {
+        "title": proj.get("title"),
+        "project_code": proj.get("project_code"),
+        "status": proj.get("status"),
+        "address": proj.get("address"),
+        "start_date": proj.get("start_date"),
+        "expected_completion": proj.get("expected_completion"),
+        "contract_value": proj.get("contract_value"),
+        "amount_spent": proj.get("amount_spent"),
+        "stages": [
+            {"name": s.get("name"), "status": s.get("status"), "progress_pct": s.get("progress_pct"), "expected_date": s.get("expected_date")}
+            for s in (proj.get("stages") or [])
+        ],
+        "pending_drawings": [
+            {"title": d.get("name"), "category": d.get("category"), "version": d.get("current_version")}
+            for d in (proj.get("drawings") or []) if d.get("status") == "pending"
+        ],
+        "pending_materials": [
+            {"item_name": m.get("item_name"), "category": m.get("category")}
+            for m in (proj.get("materials") or []) if m.get("status") == "pending"
+        ],
+        "quality_inspections_count": len(proj.get("quality_inspections") or []),
+        "recent_activities": [
+            {"action": a.get("action"), "module": a.get("module"), "time": a.get("timestamp")}
+            for a in (proj.get("activities") or [])[:5]
+        ],
+        "warranty_active": proj.get("warranty_active", False),
+        "warranty_years": proj.get("warranty_years", 0)
+    }
+
+    reply = await chat_portal_gemini(body.message, context, body.history)
+    return {"reply": reply}

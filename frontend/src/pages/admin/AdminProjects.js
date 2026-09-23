@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -7,7 +6,8 @@ import { resolveMediaUrl } from "@/lib/mediaUrl";
 import {
   Plus, Trash2, Save, X, Loader2, RefreshCw, Building2, ClipboardList,
   CheckCircle2, PlayCircle, Circle, Camera, Users, User, Check, CalendarCheck,
-  FileText, UploadCloud, Package, IndianRupee, Link as LinkIcon, Video, ImageIcon,FolderOpen
+  FileText, UploadCloud, Wrench, Package, IndianRupee, Link as LinkIcon, Video,
+  ImageIcon, FolderOpen, ShieldCheck, AlertTriangle, History
 } from "lucide-react";
 
 const API_BASE = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000") + "/api";
@@ -37,9 +37,15 @@ const PR = {
   removeCamera: (id, camId) => api.delete(`/admin/projects/${id}/cameras/${camId}`).then(r => r.data),
   toggleCameraStatus: (id, camId) => api.patch(`/admin/projects/${id}/cameras/${camId}/status`).then(r => r.data),
 
-  // Documents
   createDocument: (id, body) => api.post(`/admin/projects/${id}/documents`, body).then(r => r.data),
   removeDocument: (id, docId) => api.delete(`/admin/projects/${id}/documents/${docId}`).then(r => r.data),
+
+  createQuality: (id, body) => api.post(`/admin/projects/${id}/quality`, body).then(r => r.data),
+  updateQuality: (id, qualId, body) => api.put(`/admin/projects/${id}/quality/${qualId}`, body).then(r => r.data),
+  removeQuality: (id, qualId) => api.delete(`/admin/projects/${id}/quality/${qualId}`).then(r => r.data),
+
+  updateWarranty: (id, body) => api.put(`/admin/projects/${id}/warranty`, body).then(r => r.data),
+  updateTicket: (id, ticketId, body) => api.put(`/admin/projects/${id}/maintenance/${ticketId}`, body).then(r => r.data),
 };
 
 export default function AdminProjects() {
@@ -54,8 +60,10 @@ export default function AdminProjects() {
   const [managingMaterials, setManagingMaterials] = useState(null);
   const [managingFinance, setManagingFinance] = useState(null);
   const [managingCctv, setManagingCctv] = useState(null);
-  const [editInfo, setEditInfo] = useState(null);
   const [managingDocs, setManagingDocs] = useState(null);
+  const [managingQuality, setManagingQuality] = useState(null);
+  const [managingMaintenance, setManagingMaintenance] = useState(null);
+  const [editInfo, setEditInfo] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,7 +88,7 @@ export default function AdminProjects() {
         <div>
           <div className="text-xs font-semibold text-[#FF5A00] uppercase tracking-wider">Operations · Project Tracker</div>
           <h1 className="text-2xl md:text-3xl font-bold text-[#000F1B] mt-1">Customer Projects</h1>
-          <p className="text-sm text-[#111111]/60 mt-1">Manage timeline, team, drawings, logistics, finance, and CCTV.</p>
+          <p className="text-sm text-[#111111]/60 mt-1">Manage timeline, team, drawings, logistics, finance, quality, maintenance, and CCTV.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="px-4 py-2 text-xs font-semibold text-[#000F1B] bg-white border border-black/10 rounded-xl hover:bg-[#F2F2F2] flex items-center gap-1.5"><RefreshCw className="w-4 h-4" /> Refresh</button>
@@ -104,7 +112,10 @@ export default function AdminProjects() {
             const teamCount = (p.team_ids || []).length;
             const dwgCount = (p.drawings || []).length;
             const matCount = (p.materials || []).length;
+            const docCount = (p.documents || []).length;
             const cctvCount = (p.cctv_cameras || []).length;
+            const qualCount = (p.quality_inspections || []).length;
+            const maintCount = (p.maintenance_tickets || []).length;
 
             return (
               <div key={p.id} className="rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-md transition flex flex-col" data-testid={`proj-row-${p.id}`}>
@@ -172,8 +183,8 @@ export default function AdminProjects() {
                       <span className="text-[10px] font-bold">Draw ({dwgCount})</span>
                     </button>
                     <button onClick={() => setManagingDocs(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-[#F9FAFB] hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
-                      <FolderOpen className="w-4 h-4 text-purple-600" />
-                      <span className="text-[10px] font-bold">Docs ({(p.documents || []).length})</span>
+                      <FolderOpen className="w-4 h-4 text-[#FF5A00]" />
+                      <span className="text-[10px] font-bold">Docs ({docCount})</span>
                     </button>
                     <button onClick={() => setManagingMaterials(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
                       <Package className="w-4 h-4 text-amber-500" />
@@ -183,7 +194,14 @@ export default function AdminProjects() {
                       <IndianRupee className="w-4 h-4 text-[#10B981]" />
                       <span className="text-[10px] font-bold">Finance</span>
                     </button>
-                    {/* NEW CCTV BUTTON */}
+                    <button onClick={() => setManagingQuality(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                      <span className="text-[10px] font-bold">Qual ({qualCount})</span>
+                    </button>
+                    <button onClick={() => setManagingMaintenance(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
+                      <Wrench className="w-4 h-4 text-blue-600" />
+                      <span className="text-[10px] font-bold">Maint ({maintCount})</span>
+                    </button>
                     <button onClick={() => setManagingCctv(p)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-[#000F1B] p-2 transition shadow-sm h-14 min-w-[4rem]">
                       <Video className="w-4 h-4 text-red-500" />
                       <span className="text-[10px] font-bold">CCTV ({cctvCount})</span>
@@ -213,23 +231,493 @@ export default function AdminProjects() {
       {managingDrawings && <DrawingsManagerModal project={managingDrawings} onClose={() => setManagingDrawings(null)} onSaved={() => { load(); }} />}
       {managingMaterials && <MaterialsManagerModal project={managingMaterials} onClose={() => setManagingMaterials(null)} onSaved={() => { load(); }} />}
       {managingFinance && <FinanceManagerModal project={managingFinance} onClose={() => setManagingFinance(null)} onSaved={() => { load(); }} />}
-
-      {/* CCTV MODAL */}
       {managingCctv && <CctvManagerModal project={managingCctv} onClose={() => setManagingCctv(null)} onSaved={() => { load(); }} />}
-    {managingDocs && <DocsManagerModal project={managingDocs} onClose={() => setManagingDocs(null)} onSaved={() => { load(); }} />}
+      {managingDocs && <DocsManagerModal project={managingDocs} onClose={() => setManagingDocs(null)} onSaved={() => { load(); }} />}
+      {managingQuality && <QualityManagerModal project={managingQuality} onClose={() => setManagingQuality(null)} onSaved={() => { load(); }} />}
+      {managingMaintenance && <MaintenanceManagerModal project={managingMaintenance} onClose={() => setManagingMaintenance(null)} onSaved={() => { load(); }} />}
     </div>
-
   );
 }
 
 // ------------------------------------------------------------------
-// CCTV MANAGER MODAL (Phase 4)
+// DRAWINGS MANAGER MODAL (WITH FULL VERSION HISTORY LOGS)
+// ------------------------------------------------------------------
+function DrawingsManagerModal({ project, onClose, onSaved }) {
+  const [drawings, setDrawings] = useState(project.drawings || []);
+  const [uploading, setUploading] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newCategory, setNewCategory] = useState("Architectural");
+  const [revisingId, setRevisingId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const fetchProject = async () => {
+    try { const p = await PR.get(project.id); setDrawings(p.drawings || []); onSaved(); } catch { }
+  };
+
+  const handleUploadNew = async (e) => {
+    const file = e.target.files?.[0]; if (!file || !newTitle.trim()) return;
+    setUploading(true);
+    try {
+      const res = await adminApi.uploadImage(file, "drawings");
+      await PR.createDrawing(project.id, { name: newTitle.trim(), category: newCategory, url: res.url });
+      toast.success("Drawing uploaded!"); setNewTitle(""); await fetchProject();
+    } catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
+  };
+
+  const handleUploadRevision = async (drawingId, e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setRevisingId(drawingId);
+    try {
+      const res = await adminApi.uploadImage(file, "drawings");
+      await PR.reviseDrawing(project.id, drawingId, { url: res.url });
+      toast.success("Revision V" + ((drawings.find(d => d.id === drawingId)?.current_version || 1) + 1) + " uploaded!");
+      await fetchProject();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Revision failed"); } finally { setRevisingId(null); e.target.value = ""; }
+  };
+
+  const handleDelete = async (drawingId) => {
+    if (!window.confirm("Delete this drawing?")) return;
+    await PR.removeDrawing(project.id, drawingId); toast.success("Deleted"); await fetchProject();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
+      <div className="bg-[#F5F6F8] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="p-5 border-b border-black/5 flex items-center justify-between bg-white shrink-0">
+          <div>
+            <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Drawings & Architectural Vault</div>
+            <div className="font-bold text-[#000F1B] text-base">{project.title}</div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="bg-white rounded-xl border border-black/5 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-[#000F1B] mb-3">Upload New Drawing Plan</h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+              <div className="flex-1 w-full">
+                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Drawing Title *</label>
+                <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Ground Floor Electrical & Lighting Layout" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none" />
+              </div>
+              <div className="w-full sm:w-48">
+                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Category</label>
+                <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none">
+                  <option>Architectural</option><option>Structural</option><option>Electrical</option><option>Plumbing</option><option>Interior</option>
+                </select>
+              </div>
+              <label className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#000F1B] text-white px-5 py-2 text-sm font-semibold transition min-h-[40px] cursor-pointer hover:bg-[#FF5A00]">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}<span>Upload Plan</span>
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUploadNew} disabled={!newTitle.trim() || uploading} />
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-[#000F1B]">Active Drawings ({drawings.length})</h3>
+
+            {drawings.length === 0 ? (
+              <div className="bg-white rounded-xl border border-black/5 p-8 text-center text-xs text-[#111111]/50 italic">
+                No drawings uploaded for this project yet.
+              </div>
+            ) : (
+              drawings.map(d => {
+                const versions = d.versions || [];
+                const latest = versions[versions.length - 1] || {};
+                const isExpanded = expandedId === d.id;
+
+                return (
+                  <div key={d.id} className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden">
+                    <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <a href={resolveMediaUrl(latest.url)} target="_blank" rel="noreferrer" className="w-14 h-14 rounded-xl bg-[#F5F6F8] border border-black/10 overflow-hidden shrink-0 group relative block">
+                          <img src={resolveMediaUrl(latest.url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                        </a>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] font-bold text-[#FF5A00] uppercase tracking-wider">{d.category}</span>
+                            <span className="text-[9px] font-mono font-bold bg-[#000F1B] text-white px-2 py-0.5 rounded">V{d.current_version}</span>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${d.status === "approved" ? "bg-emerald-50 text-emerald-600" :
+                              d.status === "changes_required" ? "bg-blue-50 text-blue-600" :
+                                d.status === "rejected" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                              }`}>
+                              {d.status.replace("_", " ")}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-[#000F1B] text-sm truncate">{d.name}</h4>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                          className="px-3 py-1.5 rounded-lg bg-[#F5F6F8] border border-black/10 text-xs font-bold text-[#000F1B] hover:bg-[#000F1B] hover:text-white transition flex items-center gap-1"
+                        >
+                          <History className="w-3.5 h-3.5" /> {isExpanded ? "Hide History" : `History (${versions.length})`}
+                        </button>
+
+                        <label className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-blue-600 hover:text-white transition">
+                          {revisingId === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Upload V" + (d.current_version + 1)}
+                          <input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleUploadRevision(d.id, e)} />
+                        </label>
+
+                        <button onClick={() => handleDelete(d.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center hover:bg-red-600 hover:text-white transition">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="bg-[#F9FAFB] border-t border-black/5 p-4 space-y-3">
+                        <div className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-2">Revision & Feedback History</div>
+                        <div className="space-y-2">
+                          {[...versions].reverse().map((v) => (
+                            <div key={v.version} className="bg-white border border-black/10 rounded-xl p-3 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <a href={resolveMediaUrl(v.url)} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden border shrink-0">
+                                  <img src={resolveMediaUrl(v.url)} alt="" className="w-full h-full object-cover" />
+                                </a>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-[#000F1B]">Version {v.version}</span>
+                                    <span className="text-[10px] text-[#111111]/40">• {v.uploaded_at ? new Date(v.uploaded_at).toLocaleDateString() : ""}</span>
+                                  </div>
+                                  {v.client_comment ? (
+                                    <p className="text-[11px] text-[#111111]/70 italic truncate mt-0.5">"{v.client_comment}"</p>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400 italic">No comment left</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                {v.client_decision ? (
+                                  <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${v.client_decision === "approved" ? "bg-emerald-50 text-emerald-600" :
+                                    v.client_decision === "changes_required" ? "bg-blue-50 text-blue-600" : "bg-red-50 text-red-600"
+                                    }`}>
+                                    {v.client_decision.replace("_", " ")}
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-bold text-amber-600 uppercase">Pending</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// QUALITY INSPECTIONS MANAGER MODAL
+// ------------------------------------------------------------------
+function QualityManagerModal({ project, onClose, onSaved }) {
+  const [inspections, setInspections] = useState(project.quality_inspections || []);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  const getTodayStr = () => new Date().toISOString().split("T")[0];
+
+  const [form, setForm] = useState({
+    name: "", category: "Foundation", status: "pending",
+    inspector_name: "", remarks: "", photo_url: "", inspected_at: getTodayStr()
+  });
+
+  const fetchProject = async () => {
+    try { const p = await PR.get(project.id); setInspections(p.quality_inspections || []); onSaved(); } catch { }
+  };
+
+  const openNew = () => {
+    setEditId(null);
+    setForm({ name: "", category: "Foundation", status: "pending", inspector_name: "", remarks: "", photo_url: "", inspected_at: getTodayStr() });
+    setShowForm(true);
+  };
+
+  const openEdit = (insp) => {
+    setEditId(insp.id);
+    const dateStr = insp.inspected_at ? new Date(insp.inspected_at).toISOString().split("T")[0] : getTodayStr();
+    setForm({ ...insp, inspected_at: dateStr });
+    setShowForm(true);
+  };
+
+  const saveInspection = async (e) => {
+    e.preventDefault(); setLoading(true);
+    try {
+      const payload = { ...form };
+      if (payload.inspected_at) payload.inspected_at = new Date(payload.inspected_at).toISOString();
+      if (editId) await PR.updateQuality(project.id, editId, payload);
+      else await PR.createQuality(project.id, payload);
+      toast.success("Quality audit saved & Client notified");
+      setShowForm(false);
+      await fetchProject();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save inspection"); } finally { setLoading(false); }
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return; setUploading(true);
+    try {
+      const res = await adminApi.uploadImage(file, "quality");
+      setForm(prev => ({ ...prev, photo_url: res.url }));
+      toast.success("Audit photo attached!");
+    } catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#000F1B]/70 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
+      <div className="bg-[#F5F6F8] rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="p-5 sm:p-6 border-b border-black/5 flex items-center justify-between bg-white shrink-0">
+          <div>
+            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Quality Audits & Checklists</div>
+            <div className="text-lg font-bold text-[#000F1B] mt-0.5">{project.title}</div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          {!showForm && (
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#000F1B]">Inspection Logs ({inspections.length})</h3>
+              <button onClick={openNew} className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition">
+                <Plus className="w-3.5 h-3.5" /> Log Inspection
+              </button>
+            </div>
+          )}
+
+          {showForm ? (
+            <div className="bg-white rounded-2xl border border-black/5 p-6 relative shadow-sm">
+              <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/5 grid place-items-center hover:bg-black/10 transition"><X className="w-4 h-4" /></button>
+              <h3 className="text-sm font-bold text-[#000F1B] mb-5">{editId ? "Edit Quality Audit" : "Log New Quality Check"}</h3>
+
+              <form onSubmit={saveInspection} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase mb-1">Audit Name / Checklist Item *</label>
+                    <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Slump Test - Ground Floor Slab" className="w-full px-3 py-2.5 border rounded-xl bg-[#F9FAFB] focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase mb-1">Category</label>
+                    <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500">
+                      <option>Foundation</option><option>Structure</option><option>MEP</option><option>Finishing</option><option>General</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase mb-1">Status</label>
+                    <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-[#000F1B]">
+                      <option value="pending">Scheduled</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="rectification">Rectification Required (Failed)</option>
+                      <option value="passed">Passed / Compliant</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase mb-1">Inspector / Verifier Name *</label>
+                    <input type="text" required value={form.inspector_name} onChange={e => setForm({ ...form, inspector_name: e.target.value })} placeholder="Er. Name" className="w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase mb-1">Inspection Date</label>
+                    <input type="date" value={form.inspected_at} onChange={e => setForm({ ...form, inspected_at: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500" />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase mb-1">Remarks / Notes</label>
+                    <textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} placeholder="Any rectification notes or clearance details..." rows={2} className="w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
+                  </div>
+
+                  <div className="md:col-span-2 flex items-center gap-4 bg-[#F9FAFB] border border-black/10 rounded-xl p-3">
+                    {form.photo_url ? (
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-black/10">
+                        <img src={resolveMediaUrl(form.photo_url)} alt="audit" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => setForm({ ...form, photo_url: "" })} className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white grid place-items-center rounded-bl-lg"><X className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-white grid place-items-center"><Camera className="w-5 h-5 text-[#111111]/30" /></div>
+                    )}
+                    <label className="flex-1 cursor-pointer bg-white border border-black/10 hover:bg-[#000F1B] hover:text-white text-[#000F1B] rounded-lg px-3 py-2 text-xs font-bold transition flex items-center justify-center gap-2">
+                      {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                      {form.photo_url ? "Replace Evidence Photo" : "Upload Inspection Image"}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-black/5 mt-4">
+                  <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl border font-semibold text-xs">Cancel</button>
+                  <button type="submit" disabled={loading} className="px-6 py-2.5 rounded-xl bg-[#000F1B] hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-2 transition">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Audit
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {inspections.map(insp => {
+                const isPassed = insp.status === 'passed';
+                const isRect = insp.status === 'rectification';
+                return (
+                  <div key={insp.id} className={`bg-white rounded-2xl border p-5 flex flex-col justify-between group ${isPassed ? 'border-emerald-100' : isRect ? 'border-red-100' : 'border-black/5'}`}>
+                    <div className="flex justify-between items-start mb-3 border-b border-black/5 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 grid place-items-center ${insp.photo_url ? 'border border-black/10' : 'bg-gray-50 border border-gray-100'}`}>
+                          {insp.photo_url ? <img src={resolveMediaUrl(insp.photo_url)} alt="" className="w-full h-full object-cover" /> : <ShieldCheck className="w-5 h-5 text-gray-400" />}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-[#000F1B] text-sm leading-tight line-clamp-1">{insp.name}</h4>
+                          <p className="text-[10px] text-[#111111]/50 mt-0.5">{insp.category} • By {insp.inspector_name}</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shrink-0 ${isPassed ? 'bg-emerald-50 text-emerald-600' : isRect ? 'bg-red-50 text-red-600' : 'bg-[#F2F2F2] text-[#111111]/50'}`}>
+                        {isPassed ? <CheckCircle2 className="inline w-3 h-3 mr-1" /> : isRect ? <AlertTriangle className="inline w-3 h-3 mr-1" /> : null}
+                        {insp.status.replace("_", " ")}
+                      </span>
+                    </div>
+
+                    {insp.remarks && (
+                      <div className="text-xs text-[#111111]/70 bg-[#F9FAFB] p-2 rounded mb-3 line-clamp-2 italic">
+                        "{insp.remarks}"
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 mt-auto">
+                      <button onClick={() => openEdit(insp)} className="px-3 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-bold hover:bg-[#000F1B] hover:text-white transition">Edit</button>
+                      <button onClick={() => { if (window.confirm("Delete this inspection record?")) { PR.removeQuality(project.id, insp.id).then(fetchProject); } }} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">Delete</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// MAINTENANCE & WARRANTY MANAGER MODAL
+// ------------------------------------------------------------------
+function MaintenanceManagerModal({ project, onClose, onSaved }) {
+  const [tab, setTab] = useState("warranty");
+  const [saving, setSaving] = useState(false);
+  const tickets = project.maintenance_tickets || [];
+
+  const [wForm, setWForm] = useState({
+    warranty_start_date: project.warranty_start_date ? new Date(project.warranty_start_date).toISOString().split("T")[0] : "",
+    warranty_years: project.warranty_years || 1,
+  });
+
+  const saveWarranty = async () => {
+    setSaving(true);
+    try {
+      await PR.updateWarranty(project.id, {
+        warranty_start_date: wForm.warranty_start_date || null,
+        warranty_years: Number(wForm.warranty_years)
+      });
+      toast.success("Warranty settings saved!");
+      onSaved();
+    } catch { toast.error("Update failed"); } finally { setSaving(false); }
+  };
+
+  const updateTicket = async (ticketId, status, notes) => {
+    try {
+      await PR.updateTicket(project.id, ticketId, { status, admin_notes: notes });
+      toast.success("Ticket updated & client notified");
+      onSaved();
+      onClose();
+    } catch { toast.error("Failed to update ticket"); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#000F1B]/70 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
+      <div className="bg-[#F5F6F8] rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="p-5 border-b border-black/5 flex items-center justify-between bg-white">
+          <div><div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Maintenance & Warranty</div><div className="font-bold text-[#000F1B] text-base">{project.title}</div></div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
+        </div>
+
+        <div className="flex border-b border-black/5 bg-white px-5 gap-6">
+          <button onClick={() => setTab("warranty")} className={`py-3 text-xs font-bold border-b-2 transition ${tab === "warranty" ? "border-[#FF5A00] text-[#FF5A00]" : "border-transparent text-[#111111]/50"}`}>Warranty Setup</button>
+          <button onClick={() => setTab("tickets")} className={`py-3 text-xs font-bold border-b-2 transition ${tab === "tickets" ? "border-[#FF5A00] text-[#FF5A00]" : "border-transparent text-[#111111]/50"}`}>Support Tickets ({tickets.length})</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          {tab === "warranty" && (
+            <div className="bg-white rounded-2xl border p-6 max-w-md">
+              <h3 className="text-sm font-bold mb-4">Configure Post-Handover Warranty</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Start Date (Handover Date)</label>
+                  <input type="date" value={wForm.warranty_start_date} onChange={e => setWForm({ ...wForm, warranty_start_date: e.target.value })} className="w-full px-3 py-2 border rounded-xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Duration (Years)</label>
+                  <select value={wForm.warranty_years} onChange={e => setWForm({ ...wForm, warranty_years: e.target.value })} className="w-full px-3 py-2 border rounded-xl text-sm">
+                    <option value={1}>1 Year</option><option value={2}>2 Years</option><option value={5}>5 Years</option><option value={10}>10 Years</option>
+                  </select>
+                </div>
+                <button onClick={saveWarranty} disabled={saving} className="w-full bg-[#000F1B] hover:bg-[#FF5A00] transition text-white py-2.5 rounded-xl text-xs font-bold mt-2">
+                  {saving ? "Saving..." : "Activate / Update Warranty"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === "tickets" && (
+            <div className="space-y-4">
+              {tickets.length === 0 ? <p className="text-xs text-gray-500 italic bg-white p-6 rounded-xl border text-center">No tickets raised by client.</p> :
+                tickets.map(t => (
+                  <div key={t.id} className="bg-white border rounded-xl p-5 shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded text-gray-600 mr-2">{t.id}</span>
+                        <span className="text-sm font-bold">{t.title}</span>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase">{t.status.replace("_", " ")}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4">{t.description}</p>
+
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1 text-[#FF5A00]">Update Status</label>
+                        <select className="w-full border border-black/10 p-2 rounded-lg text-xs font-bold bg-white" defaultValue={t.status} id={`status-${t.id}`}>
+                          <option value="open">Open (Red)</option><option value="in_progress">In Progress (Yellow)</option><option value="resolved">Resolved (Green)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1 text-[#FF5A00]">Resolution Notes (Visible to Client)</label>
+                        <input type="text" defaultValue={t.admin_notes || ""} id={`note-${t.id}`} placeholder="e.g. Plumber dispatched..." className="w-full border border-black/10 p-2 rounded-lg text-xs bg-white" />
+                      </div>
+                    </div>
+                    <div className="mt-3 text-right">
+                      <button onClick={() => updateTicket(t.id, document.getElementById(`status-${t.id}`).value, document.getElementById(`note-${t.id}`).value)} className="bg-[#000F1B] hover:bg-emerald-600 transition text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm">Save & Notify Client</button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// CCTV MANAGER MODAL
 // ------------------------------------------------------------------
 function CctvManagerModal({ project, onClose, onSaved }) {
   const [cameras, setCameras] = useState(project.cctv_cameras || []);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ name: "", camera_type: "youtube", url: "", status: "online", location_label: "" });
 
@@ -262,18 +750,13 @@ function CctvManagerModal({ project, onClose, onSaved }) {
 
   const deleteCam = async (camId) => {
     if (!window.confirm("Remove this camera from the project?")) return;
-    try {
-      await PR.removeCamera(project.id, camId);
-      toast.success("Camera removed");
-      await fetchProject();
-    } catch { toast.error("Failed to remove camera"); }
+    try { await PR.removeCamera(project.id, camId); toast.success("Camera removed"); await fetchProject(); }
+    catch { toast.error("Failed to remove camera"); }
   };
 
   const toggleStatus = async (camId) => {
-    try {
-      await PR.toggleCameraStatus(project.id, camId);
-      await fetchProject();
-    } catch { toast.error("Failed to toggle status"); }
+    try { await PR.toggleCameraStatus(project.id, camId); await fetchProject(); }
+    catch { toast.error("Failed to toggle status"); }
   };
 
   return (
@@ -332,20 +815,13 @@ function CctvManagerModal({ project, onClose, onSaved }) {
                         <p className="text-[10px] text-[#111111]/50">{c.location_label || "No zone specified"} • {c.camera_type.toUpperCase()}</p>
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => toggleStatus(c.id)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider border transition ${c.status === 'online' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
-                      title="Click to toggle status"
-                    >
+                    <button onClick={() => toggleStatus(c.id)} className={`flex items-center gap-1.5 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider border transition ${c.status === 'online' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`} title="Click to toggle status">
                       <span className={`w-1.5 h-1.5 rounded-full ${c.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
                       {c.status}
                     </button>
                   </div>
 
-                  <div className="bg-[#F5F6F8] p-3 rounded-lg text-[9px] font-mono text-[#111111]/40 truncate mb-4">
-                    {c.url}
-                  </div>
+                  <div className="bg-[#F5F6F8] p-3 rounded-lg text-[9px] font-mono text-[#111111]/40 truncate mb-4">{c.url}</div>
 
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => openEdit(c)} className="px-3 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-bold hover:bg-[#000F1B] hover:text-white transition">Edit</button>
@@ -361,9 +837,8 @@ function CctvManagerModal({ project, onClose, onSaved }) {
   );
 }
 
-
 // ------------------------------------------------------------------
-// FINANCE MANAGER MODAL (Phase 3)
+// FINANCE MANAGER MODAL
 // ------------------------------------------------------------------
 function FinanceManagerModal({ project, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
@@ -371,8 +846,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
   const [projData, setProjData] = useState(project);
 
   const [form, setForm] = useState({
-    title: project.title || "",
-    address: project.address || "",
+    title: project.title || "", address: project.address || "",
     contract_value: project.contract_value || 0
   });
 
@@ -381,54 +855,36 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
   });
 
   const fetchProject = async () => {
-    try {
-      const p = await PR.get(project.id);
-      setProjData(p);
-      onSaved();
-    } catch { toast.error("Failed to refresh project data"); }
+    try { const p = await PR.get(project.id); setProjData(p); onSaved(); }
+    catch { toast.error("Failed to refresh project data"); }
   };
 
   const saveBaseSettings = async () => {
     setSavingSettings(true);
     try {
-      await PR.update(project.id, {
-        title: form.title,
-        address: form.address,
-        contract_value: Number(form.contract_value) || 0
-      });
-      toast.success("Project settings updated");
-      await fetchProject();
-    } catch {
-      toast.error("Update failed");
-    } finally { setSavingSettings(false); }
+      await PR.update(project.id, { title: form.title, address: form.address, contract_value: Number(form.contract_value) || 0 });
+      toast.success("Project settings updated"); await fetchProject();
+    } catch { toast.error("Update failed"); } finally { setSavingSettings(false); }
   };
 
   const savePayment = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault(); setLoading(true);
     try {
       await PR.logPayment(project.id, {
-        amount: Number(paymentForm.amount),
-        date: paymentForm.date,
-        method: paymentForm.method,
-        reference: paymentForm.reference,
-        notes: paymentForm.notes
+        amount: Number(paymentForm.amount), date: paymentForm.date,
+        method: paymentForm.method, reference: paymentForm.reference, notes: paymentForm.notes
       });
       toast.success("Payment logged & Client notified!");
       setPaymentForm({ amount: "", date: new Date().toISOString().split("T")[0], method: "Bank Transfer", reference: "", notes: "" });
       await fetchProject();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed to log payment");
-    } finally { setLoading(false); }
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to log payment"); }
+    finally { setLoading(false); }
   };
 
   const deletePayment = async (payId) => {
     if (!window.confirm("Reverse this payment? This will deduct the amount from the Total Paid.")) return;
-    try {
-      await PR.removePayment(project.id, payId);
-      toast.success("Payment reversed");
-      await fetchProject();
-    } catch { toast.error("Failed to reverse payment"); }
+    try { await PR.removePayment(project.id, payId); toast.success("Payment reversed"); await fetchProject(); }
+    catch { toast.error("Failed to reverse payment"); }
   };
 
   const contractValue = projData.contract_value || 0;
@@ -448,9 +904,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Project Settings Block */}
             <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm">
               <h3 className="text-sm font-bold text-[#000F1B] mb-4">Master Contract Details</h3>
               <div className="space-y-4">
@@ -472,12 +926,10 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               </div>
             </div>
 
-            {/* Live Financial Summary */}
             <div className="bg-[#000F1B] text-white rounded-2xl border border-black/5 p-6 shadow-sm flex flex-col justify-between relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-[#FF5A00]" />
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 mb-6">Financial Summary</h3>
-
                 <div className="space-y-4">
                   <div className="flex justify-between items-end border-b border-white/10 pb-3">
                     <span className="text-sm font-semibold text-white/70">Contract Value</span>
@@ -496,7 +948,6 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Payment Logger Form */}
           <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm">
             <h3 className="text-sm font-bold text-[#000F1B] mb-4">Log New Client Payment</h3>
             <form onSubmit={savePayment} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
@@ -511,10 +962,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Method *</label>
                 <select value={paymentForm.method} onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })} className="w-full px-3 py-2 border rounded-xl">
-                  <option>Bank Transfer</option>
-                  <option>UPI</option>
-                  <option>Cheque</option>
-                  <option>Cash</option>
+                  <option>Bank Transfer</option><option>UPI</option><option>Cheque</option><option>Cash</option>
                 </select>
               </div>
               <div>
@@ -527,7 +975,6 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
             </form>
           </div>
 
-          {/* Payment History Log */}
           <div>
             <h3 className="text-sm font-bold text-[#000F1B] mb-3">Payment History Log</h3>
             {payments.length === 0 ? (
@@ -536,12 +983,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
               <div className="bg-white rounded-2xl border border-black/5 overflow-hidden shadow-sm">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-[#F9FAFB] text-[10px] uppercase tracking-wider font-bold text-[#111111]/50">
-                    <tr>
-                      <th className="px-5 py-3.5">Date</th>
-                      <th className="px-5 py-3.5">Amount</th>
-                      <th className="px-5 py-3.5">Method & Ref</th>
-                      <th className="px-5 py-3.5 text-right">Action</th>
-                    </tr>
+                    <tr><th className="px-5 py-3.5">Date</th><th className="px-5 py-3.5">Amount</th><th className="px-5 py-3.5">Method & Ref</th><th className="px-5 py-3.5 text-right">Action</th></tr>
                   </thead>
                   <tbody className="divide-y divide-black/5">
                     {payments.map(p => (
@@ -552,9 +994,7 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
                           <div className="font-semibold text-[#000F1B]">{p.method}</div>
                           <div className="text-[10px] text-[#111111]/50 font-mono">{p.reference || "No ref"}</div>
                         </td>
-                        <td className="px-5 py-3 text-right">
-                          <button onClick={() => deletePayment(p.id)} className="text-[10px] font-bold text-red-500 hover:underline">Reverse</button>
-                        </td>
+                        <td className="px-5 py-3 text-right"><button onClick={() => deletePayment(p.id)} className="text-[10px] font-bold text-red-500 hover:underline">Reverse</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -568,13 +1008,13 @@ function FinanceManagerModal({ project, onClose, onSaved }) {
   );
 }
 
-
 // ------------------------------------------------------------------
-// 1. CREATE PROJECT MODAL (With True Proposal Auto-fill)
+// 1. CREATE PROJECT MODAL (With True Proposal Auto-fill & Dates)
 // ------------------------------------------------------------------
 function CreateProjectModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
-    customer_email: "", customer_name: "", title: "My Home Project", address: "", contract_value: 0
+    customer_email: "", customer_name: "", title: "My Home Project", address: "", contract_value: 0,
+    start_date: "", expected_completion: "", site_lat: "", site_lng: ""
   });
   const [saving, setSaving] = useState(false);
   const [proposals, setProposals] = useState([]);
@@ -600,12 +1040,9 @@ function CreateProjectModal({ onClose, onCreated }) {
     const p = proposals.find(x => x.id === propId);
     if (!p) return;
 
-    // Calculate actual total from Proposal DB record
     const baseCost = (Number(p.built_up_area) || 0) * (Number(p.package_price_per_sqft) || 0);
     const addonsCost = (p.addons_selected || []).reduce((sum, a) => sum + (Number(a.price) || 0), 0);
     const discount = Number(p.discount_amount) || 0;
-
-    // True Grand Total
     const trueTotal = baseCost + addonsCost - discount;
 
     setForm(prev => ({
@@ -615,16 +1052,25 @@ function CreateProjectModal({ onClose, onCreated }) {
       customer_name: p.client_name?.trim() || prev.customer_name,
       address: p.site_address?.trim() || prev.address,
       contract_value: trueTotal > 0 ? trueTotal : prev.contract_value,
-      title: `${p.client_name?.split(" ")[0] || "Client"}'s ${p.package_name || "Home"} Build`
+      title: `${p.client_name?.split(" ")[0] || "Client"}'s ${p.package_name || "Home"} Build`,
+      start_date: p.expected_start ? String(p.expected_start).slice(0, 10) : prev.start_date,
+      expected_completion: p.expected_completion ? String(p.expected_completion).slice(0, 10) : prev.expected_completion
     }));
-    toast.success("Client details and final budget auto-filled from proposal!");
+    toast.success("Client details and dates auto-filled from proposal!");
   };
 
   const create = async () => {
     if (!form.customer_email.trim()) { toast.error("Client Google Email is required"); return; }
     setSaving(true);
     try {
-      const payload = { ...form, contract_value: Number(form.contract_value) || 0 };
+      const payload = { 
+        ...form, 
+        contract_value: Number(form.contract_value) || 0,
+        site_lat: form.site_lat ? Number(form.site_lat) : null,
+        site_lng: form.site_lng ? Number(form.site_lng) : null,
+        start_date: form.start_date || null,
+        expected_completion: form.expected_completion || null
+      };
       await PR.create(payload);
       toast.success("Live Project Created Successfully!");
       onCreated();
@@ -635,7 +1081,7 @@ function CreateProjectModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
-      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative overflow-hidden" data-testid="proj-create-modal">
+      <div className="bg-white rounded-3xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden" data-testid="proj-create-modal">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-[#FF5A00]" />
 
         <div className="flex items-center justify-between mb-2">
@@ -646,7 +1092,7 @@ function CreateProjectModal({ onClose, onCreated }) {
           Convert an accepted proposal into a live project, or create one from scratch.
         </p>
 
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
           {/* Smart Link Dropdown */}
           <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50">
             <label className="block text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -685,15 +1131,34 @@ function CreateProjectModal({ onClose, onCreated }) {
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Client Name</label>
               <input value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} placeholder="e.g. Rajesh Kumar" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
             </div>
-
+            
             <div>
-              <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Site Address</label>
-              <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Plot / City" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+              <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Project Start Date</label>
+              <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
             </div>
 
             <div>
+              <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Forecast Completion</label>
+              <input type="date" value={form.expected_completion} onChange={e => setForm({ ...form, expected_completion: e.target.value })} className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+            </div>
+
+            <div className="sm:col-span-2">
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Total Contract Value (₹)</label>
               <input type="number" value={form.contract_value} onChange={e => setForm({ ...form, contract_value: e.target.value })} placeholder="e.g. 18500000" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm font-bold text-[#10B981] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <div className="sm:col-span-2 pt-2 border-t border-black/5">
+              <div className="text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-2">Live Weather Coordinates</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-[#111111]/70 mb-1">Latitude</label>
+                  <input type="number" step="any" value={form.site_lat} onChange={e => setForm({ ...form, site_lat: e.target.value })} placeholder="12.9716" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-[#111111]/70 mb-1">Longitude</label>
+                  <input type="number" step="any" value={form.site_lng} onChange={e => setForm({ ...form, site_lng: e.target.value })} placeholder="77.5946" className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -710,37 +1175,45 @@ function CreateProjectModal({ onClose, onCreated }) {
 }
 
 // ------------------------------------------------------------------
-// Edit Basic Info Modal (Now includes Amount Paid)
+// Edit Basic Info Modal (Dates + Lat/Lng + Finance)
 // ------------------------------------------------------------------
 function EditInfoModal({ project, onClose, onSaved }) {
   const [form, setForm] = useState({
-    title: project.title || "",
+    title: project.title || "", 
     address: project.address || "",
-    contract_value: project.contract_value || 0,
-    amount_spent: project.amount_spent || 0 // New field for Client Payments
+    contract_value: project.contract_value || 0, 
+    amount_spent: project.amount_spent || 0,
+    site_lat: project.site_lat || "",
+    site_lng: project.site_lng || "",
+    start_date: project.start_date ? String(project.start_date).slice(0, 10) : (project.created_at ? String(project.created_at).slice(0, 10) : ""),
+    expected_completion: project.expected_completion ? String(project.expected_completion).slice(0, 10) : ""
   });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
-      await PR.update(project.id, {
-        ...form,
-        contract_value: Number(form.contract_value) || 0,
-        amount_spent: Number(form.amount_spent) || 0
+      await PR.update(project.id, { 
+        ...form, 
+        contract_value: Number(form.contract_value) || 0, 
+        amount_spent: Number(form.amount_spent) || 0,
+        site_lat: form.site_lat ? Number(form.site_lat) : null,
+        site_lng: form.site_lng ? Number(form.site_lng) : null,
+        start_date: form.start_date || null,
+        expected_completion: form.expected_completion || null
       });
-      toast.success("Project financials updated");
+      toast.success("Project settings updated"); 
       onSaved();
-    } catch {
-      toast.error("Update failed");
+    } catch { 
+      toast.error("Update failed"); 
     } finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-[#000F1B] text-lg">Project Details & Finances</div>
+      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4 border-b border-black/5 pb-4">
+          <div className="font-bold text-[#000F1B] text-lg">Project Settings</div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 grid place-items-center text-[#000F1B] transition"><X className="w-4 h-4" /></button>
         </div>
 
@@ -753,6 +1226,18 @@ function EditInfoModal({ project, onClose, onSaved }) {
             <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Site Address</label>
             <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
           </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-black/5">
+            <div>
+              <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Project Start</label>
+              <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Forecast Completion</label>
+              <input type="date" value={form.expected_completion} onChange={e => setForm({ ...form, expected_completion: e.target.value })} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5A00]" />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-black/5">
             <div>
               <label className="block text-[11px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Total Contract (₹)</label>
@@ -763,9 +1248,22 @@ function EditInfoModal({ project, onClose, onSaved }) {
               <input type="number" value={form.amount_spent} onChange={e => setForm({ ...form, amount_spent: e.target.value })} className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-black/5 bg-[#F9FAFB] p-3 rounded-xl border border-black/5">
+            <div className="col-span-2"><span className="text-[10px] font-bold uppercase text-[#000F1B]">Live Weather Coordinates</span></div>
+            <div>
+              <label className="block text-[10px] text-[#111111]/70 mb-1">Latitude</label>
+              <input type="number" step="any" value={form.site_lat} onChange={e => setForm({ ...form, site_lat: e.target.value })} placeholder="12.9716" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-[#111111]/70 mb-1">Longitude</label>
+              <input type="number" step="any" value={form.site_lng} onChange={e => setForm({ ...form, site_lng: e.target.value })} placeholder="77.5946" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm" />
+            </div>
+          </div>
+
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-black/10 bg-white px-5 py-2.5 text-xs font-semibold text-[#000F1B] hover:bg-[#F2F2F2] transition">Cancel</button>
           <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-xl bg-[#000F1B] hover:bg-[#FF5A00] text-white px-6 py-2.5 text-sm font-bold transition shadow-sm disabled:opacity-60">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Updates
@@ -775,17 +1273,14 @@ function EditInfoModal({ project, onClose, onSaved }) {
     </div>
   );
 }
-
-
 // ------------------------------------------------------------------
-// FULL MATERIALS MANAGER MODAL
+// MATERIALS MANAGER MODAL
 // ------------------------------------------------------------------
 function MaterialsManagerModal({ project, onClose, onSaved }) {
   const [materials, setMaterials] = useState(project.materials || []);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ category: "Structure", item_name: "", brand: "", grade_spec: "", quantity: "", unit: "Nos", unit_price: "", status: "ordered", payment_status: "pending", photo_url: "", notes: "" });
 
@@ -799,11 +1294,7 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
     setShowForm(true);
   };
 
-  const openEdit = (mat) => {
-    setEditId(mat.id);
-    setForm({ ...mat });
-    setShowForm(true);
-  };
+  const openEdit = (mat) => { setEditId(mat.id); setForm({ ...mat }); setShowForm(true); };
 
   const saveMaterial = async (e) => {
     e.preventDefault(); setLoading(true);
@@ -821,8 +1312,7 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
       const res = await adminApi.uploadImage(file, "materials");
       setForm(prev => ({ ...prev, photo_url: res.url }));
       toast.success("Photo attached!");
-    }
-    catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
+    } catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
   };
 
   return (
@@ -855,7 +1345,6 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
                   <div><label className="block text-[10px] font-bold uppercase mb-1">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl font-bold text-amber-600"><option value="ordered">Ordered</option><option value="delivered">Delivered</option><option value="inspected">Inspected</option><option value="installed">Installed</option></select></div>
                   <div><label className="block text-[10px] font-bold uppercase mb-1">Payment</label><select value={form.payment_status} onChange={e => setForm({ ...form, payment_status: e.target.value })} className="w-full px-3 py-2.5 border rounded-xl"><option value="pending">Pending</option><option value="paid">Paid</option></select></div>
 
-                  {/* Photo Uploader */}
                   <div className="md:col-span-2 flex items-center gap-4 bg-white border border-black/10 rounded-xl p-3">
                     {form.photo_url ? (
                       <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-black/10">
@@ -896,7 +1385,6 @@ function MaterialsManagerModal({ project, onClose, onSaved }) {
                     </div>
                     <span className="text-[9px] uppercase tracking-wider font-bold bg-[#F2F2F2] px-2 py-1 rounded-md">{m.status}</span>
                   </div>
-
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => openEdit(m)} className="px-3 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-bold hover:bg-[#000F1B] hover:text-white transition">Edit</button>
                     <button onClick={() => { if (window.confirm("Delete?")) { PR.removeMaterial(project.id, m.id).then(fetchProject); } }} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-600 hover:text-white transition">Delete</button>
@@ -929,8 +1417,7 @@ function StagesEditor({ project, onClose, onSaved }) {
       });
       const next = [...stages]; next[idx] = updated; setStages(next);
       toast.success(`"${s.name}" saved`); onSaved();
-    } catch { toast.error("Save failed"); }
-    finally { setSaving(null); }
+    } catch { toast.error("Save failed"); } finally { setSaving(null); }
   };
 
   const uploadPhoto = async (idx, file) => {
@@ -943,8 +1430,7 @@ function StagesEditor({ project, onClose, onSaved }) {
       next[idx] = { ...next[idx], photos: [...(next[idx].photos || []), photoUrl] };
       setStages(next);
       toast.success("Photo uploaded — click Save Stage to publish to portal");
-    } catch { toast.error("Upload failed"); }
-    finally { setUploading(null); }
+    } catch { toast.error("Upload failed"); } finally { setUploading(null); }
   };
 
   const patchStage = (idx, patch) => {
@@ -1046,12 +1532,8 @@ function AssignTeamModal({ project, onClose, onSaved }) {
 
   const handleSave = async () => {
     setSaving(true);
-    try {
-      await PR.update(project.id, { team_ids: selectedIds });
-      toast.success("Project team assigned successfully!");
-      onSaved();
-    } catch { toast.error("Failed to update project team"); }
-    finally { setSaving(false); }
+    try { await PR.update(project.id, { team_ids: selectedIds }); toast.success("Project team assigned successfully!"); onSaved(); }
+    catch { toast.error("Failed to update project team"); } finally { setSaving(false); }
   };
 
   return (
@@ -1106,18 +1588,15 @@ function AttendanceModal({ project, onClose, onSaved }) {
         const today = new Date().toLocaleDateString("en-CA");
         const entry = (project.attendance || []).find(a => a.date === today);
         setSelected(new Set(entry?.member_ids || []));
-      } catch { toast.error("Failed to load team"); }
-      finally { setLoading(false); }
+      } catch { toast.error("Failed to load team"); } finally { setLoading(false); }
     })();
   }, [project]);
 
   const toggle = (id) => { setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; }); };
   const save = async () => {
     setSaving(true);
-    try {
-      await api.patch(`/admin/projects/${project.id}/attendance`, { member_ids: [...selected] });
-      toast.success(`Attendance saved`); onSaved();
-    } catch { toast.error("Failed to save attendance"); } finally { setSaving(false); }
+    try { await api.patch(`/admin/projects/${project.id}/attendance`, { member_ids: [...selected] }); toast.success(`Attendance saved`); onSaved(); }
+    catch { toast.error("Failed to save attendance"); } finally { setSaving(false); }
   };
 
   return (
@@ -1152,92 +1631,7 @@ function AttendanceModal({ project, onClose, onSaved }) {
 }
 
 // ------------------------------------------------------------------
-// DRAWINGS & MATERIALS MODALS
-// ------------------------------------------------------------------
-function DrawingsManagerModal({ project, onClose, onSaved }) {
-  const [drawings, setDrawings] = useState(project.drawings || []);
-  const [uploading, setUploading] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState("Architectural");
-  const [revisingId, setRevisingId] = useState(null);
-
-  const fetchProject = async () => {
-    try { const p = await PR.get(project.id); setDrawings(p.drawings || []); onSaved(); } catch { }
-  };
-  const handleUploadNew = async (e) => {
-    const file = e.target.files?.[0]; if (!file || !newTitle.trim()) return;
-    setUploading(true);
-    try {
-      const res = await adminApi.uploadImage(file, "drawings");
-      await PR.createDrawing(project.id, { name: newTitle.trim(), category: newCategory, url: res.url });
-      toast.success("Drawing uploaded!"); setNewTitle(""); await fetchProject();
-    } catch { toast.error("Upload failed"); } finally { setUploading(false); e.target.value = ""; }
-  };
-  const handleUploadRevision = async (drawingId, e) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setRevisingId(drawingId);
-    try {
-      const res = await adminApi.uploadImage(file, "drawings");
-      await PR.reviseDrawing(project.id, drawingId, { url: res.url });
-      toast.success("Revision uploaded!"); await fetchProject();
-    } catch { toast.error("Revision failed"); } finally { setRevisingId(null); e.target.value = ""; }
-  };
-  const handleDelete = async (drawingId) => {
-    if (!window.confirm("Delete this drawing?")) return;
-    await PR.removeDrawing(project.id, drawingId); toast.success("Deleted"); await fetchProject();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-[#000F1B]/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
-      <div className="bg-[#F5F6F8] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-        <div className="p-5 border-b border-black/5 flex items-center justify-between bg-white">
-          <div><div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Drawings & Approvals</div><div className="font-bold text-[#000F1B] text-base">{project.title}</div></div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          <div className="bg-white rounded-xl border border-black/5 p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-[#000F1B] mb-3">Upload New Drawing</h3>
-            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-              <div className="flex-1 w-full">
-                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Drawing Title</label>
-                <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Electrical Plan" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none" />
-              </div>
-              <div className="w-full sm:w-48">
-                <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Category</label>
-                <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none">
-                  <option>Architectural</option><option>Structural</option><option>Electrical</option><option>Plumbing</option><option>Interior</option>
-                </select>
-              </div>
-              <label className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#000F1B] text-white px-5 py-2 text-sm font-semibold transition min-h-[40px] cursor-pointer hover:bg-[#FF5A00]`}>
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}<span>Upload</span>
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUploadNew} disabled={!newTitle.trim() || uploading} />
-              </label>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {drawings.map(d => (
-              <div key={d.id} className="bg-white rounded-xl border border-black/5 shadow-sm p-4 flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-[#000F1B]">{d.name} <span className="text-[10px] bg-black/5 px-2 py-0.5 rounded">V{d.current_version}</span></h4>
-                  <p className="text-xs font-semibold text-[#FF5A00]">{d.status}</p>
-                </div>
-                <div className="flex gap-2">
-                  <label className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-600 px-3 py-1.5 text-xs font-bold cursor-pointer">
-                    {revisingId === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Revise"}
-                    <input type="file" className="hidden" onChange={(e) => handleUploadRevision(d.id, e)} />
-                  </label>
-                  <button onClick={() => handleDelete(d.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-// ------------------------------------------------------------------
-// DOCUMENTS MANAGER MODAL (Phase 5)
+// DOCUMENTS MANAGER MODAL
 // ------------------------------------------------------------------
 function DocsManagerModal({ project, onClose, onSaved }) {
   const [documents, setDocuments] = useState(project.documents || []);
@@ -1246,39 +1640,27 @@ function DocsManagerModal({ project, onClose, onSaved }) {
   const [newCategory, setNewCategory] = useState("Contracts");
 
   const fetchProject = async () => {
-    try {
-      const p = await PR.get(project.id);
-      setDocuments(p.documents || []);
-      onSaved();
-    } catch { toast.error("Failed to refresh documents"); }
+    try { const p = await PR.get(project.id); setDocuments(p.documents || []); onSaved(); }
+    catch { toast.error("Failed to refresh documents"); }
   };
 
   const handleUploadNew = async (e) => {
-    const file = e.target.files?.[0]; 
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     if (!newTitle.trim()) { toast.error("Enter a document title"); e.target.value = ""; return; }
-    
     setUploading(true);
     try {
       const res = await adminApi.uploadImage(file, "documents");
       await PR.createDocument(project.id, { name: newTitle.trim(), category: newCategory, url: res.url });
       toast.success("Document uploaded & Client notified!");
-      setNewTitle(""); 
-      await fetchProject();
-    } catch { 
-      toast.error("Upload failed"); 
-    } finally { 
-      setUploading(false); e.target.value = ""; 
-    }
+      setNewTitle(""); await fetchProject();
+    } catch { toast.error("Upload failed"); }
+    finally { setUploading(false); e.target.value = ""; }
   };
 
   const handleDelete = async (docId) => {
     if (!window.confirm("Permanently delete this document from the vault?")) return;
-    try {
-      await PR.removeDocument(project.id, docId);
-      toast.success("Document deleted");
-      await fetchProject();
-    } catch { toast.error("Failed to delete document"); }
+    try { await PR.removeDocument(project.id, docId); toast.success("Document deleted"); await fetchProject(); }
+    catch { toast.error("Failed to delete document"); }
   };
 
   return (
@@ -1291,7 +1673,6 @@ function DocsManagerModal({ project, onClose, onSaved }) {
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-[#F2F2F2]"><X className="w-5 h-5 text-[#000F1B]" /></button>
         </div>
-        
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           <div className="bg-white rounded-xl border border-black/5 p-5 shadow-sm">
             <h3 className="text-sm font-bold text-[#000F1B] mb-3">Upload New Document</h3>
@@ -1303,12 +1684,8 @@ function DocsManagerModal({ project, onClose, onSaved }) {
               <div className="w-full sm:w-48">
                 <label className="block text-[10px] font-bold text-[#000F1B] uppercase tracking-wider mb-1">Category</label>
                 <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#FF5A00] outline-none">
-                  <option>Contracts</option>
-                  <option>Reports</option>
-                  <option>Invoices</option>
-                  <option>Handover</option>
-                  <option>Approvals</option>
-                  <option>General</option>
+                  <option>Contracts</option><option>Reports</option><option>Invoices</option>
+                  <option>Handover</option><option>Approvals</option><option>General</option>
                 </select>
               </div>
               <label className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#000F1B] text-white px-5 py-2 text-sm font-semibold transition min-h-[40px] cursor-pointer hover:bg-[#FF5A00]`}>
@@ -1318,7 +1695,6 @@ function DocsManagerModal({ project, onClose, onSaved }) {
               </label>
             </div>
           </div>
-          
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-[#000F1B] px-1">Vault Files ({documents.length})</h3>
             {documents.length === 0 ? (
@@ -1327,9 +1703,7 @@ function DocsManagerModal({ project, onClose, onSaved }) {
               documents.map(d => (
                 <div key={d.id} className="bg-white rounded-xl border border-black/5 shadow-sm p-4 flex justify-between items-center group hover:border-[#FF5A00]/50 transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#F5F6F8] grid place-items-center shrink-0">
-                      <FileText className="w-5 h-5 text-purple-600" />
-                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-[#F5F6F8] grid place-items-center shrink-0"><FileText className="w-5 h-5 text-purple-600" /></div>
                     <div>
                       <h4 className="font-bold text-[#000F1B]">{d.name}</h4>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -1339,12 +1713,8 @@ function DocsManagerModal({ project, onClose, onSaved }) {
                     </div>
                   </div>
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
-                    <a href={resolveMediaUrl(d.url)} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-600 hover:text-white transition">
-                      View
-                    </a>
-                    <button onClick={() => handleDelete(d.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center hover:bg-red-600 hover:text-white transition">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <a href={resolveMediaUrl(d.url)} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-600 hover:text-white transition">View</a>
+                    <button onClick={() => handleDelete(d.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 grid place-items-center hover:bg-red-600 hover:text-white transition"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               ))
@@ -1355,4 +1725,3 @@ function DocsManagerModal({ project, onClose, onSaved }) {
     </div>
   );
 }
-

@@ -37,7 +37,7 @@ const NAV_SECTIONS = [
     items: [
       { to: "/portal/drawings", label: "Drawings", icon: PencilRuler },
       { to: "/portal/materials", label: "Materials", icon: Package },
-      // { to: "/portal/quality", label: "Quality", icon: ShieldCheck },
+      { to: "/portal/quality", label: "Quality", icon: ShieldCheck },
       { to: "/portal/documents", label: "Documents", icon: FolderOpen },
       { to: "/portal/payments", label: "Payments", icon: Wallet },
     ],

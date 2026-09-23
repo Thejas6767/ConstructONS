@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import uuid
 import time
 import asyncio
-
+import random
 from db import db
 from auth import require_admin
 from customer_auth import get_current_customer
@@ -127,6 +127,28 @@ class ProjectCreateBody(BaseModel):
     amount_spent: Optional[float] = 0
     cover_image: Optional[str] = None
     team_ids: Optional[List[str]] = Field(default_factory=list)
+    site_lat: Optional[float] = None
+    site_lng: Optional[float] = None
+    expected_completion: Optional[str] = None   # ADD — ISO date "YYYY-MM-DD"
+    start_date: Optional[str] = None            # optional — project start
+
+class ProjectUpdateBody(BaseModel):
+    title: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+    package_slug: Optional[str] = None
+    quote_id: Optional[str] = None
+    contract_value: Optional[float] = None
+    amount_spent: Optional[float] = None
+    cover_image: Optional[str] = None
+    team_ids: Optional[List[str]] = None
+    documents: Optional[List[Dict[str, Any]]] = None
+    approvals: Optional[List[Dict[str, Any]]] = None
+    cctv_cameras: Optional[List[Dict[str, Any]]] = None
+    site_lat: Optional[float] = None
+    site_lng: Optional[float] = None
+    expected_completion: Optional[str] = None   # ADD
+    start_date: Optional[str] = None            # ADD if you want editable start
 
 class StagePatchBody(BaseModel):
     status: Optional[str] = None
@@ -137,19 +159,6 @@ class StagePatchBody(BaseModel):
     photos: Optional[List[str]] = None
     documents: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
-
-class ProjectUpdateBody(BaseModel):
-    title: Optional[str] = None
-    address: Optional[str] = None
-    status: Optional[str] = None
-    package_slug: Optional[str] = None
-    quote_id: Optional[str] = None
-    contract_value: Optional[float] = None
-    cover_image: Optional[str] = None
-    team_ids: Optional[List[str]] = None
-    documents: Optional[List[Dict[str, Any]]] = None
-    approvals: Optional[List[Dict[str, Any]]] = None
-    cctv_cameras: Optional[List[Dict[str, Any]]] = None
 
 class TeamInviteBody(BaseModel):
     name: Optional[str] = ""
@@ -210,6 +219,20 @@ class DocumentCreateBody(BaseModel):
     name: str
     category: str  # Contracts | Reports | Invoices | Handover | Approvals | General
     url: str
+class WarrantyUpdateBody(BaseModel):
+    warranty_start_date: Optional[str] = None
+    warranty_years: Optional[int] = None
+
+class MaintenanceTicketCreateBody(BaseModel):
+    title: str = Field(..., min_length=3, max_length=100)
+    category: str  # 'Plumbing', 'Electrical', 'Structural', 'General', etc.
+    priority: str  # 'Low', 'Medium', 'High', 'Emergency'
+    description: str
+    photo_urls: List[str] = Field(default_factory=list)
+
+class MaintenanceTicketUpdateBody(BaseModel):
+    status: str  # 'open', 'in_progress', 'resolved'
+    admin_notes: Optional[str] = None
 
 async def _build_unified_team(proj: dict) -> List[Dict[str, Any]]:
     unified: List[Dict[str, Any]] = []
@@ -515,6 +538,10 @@ async def create_project(body: ProjectCreateBody):
         "drawings": [], "materials": [], "payments_log": [],
         "attendance": [], "documents": [], "approvals": [], "cctv_cameras": [],
         "created_at": now, "updated_at": now,
+        "site_lat": body.site_lat,
+        "expected_completion": body.expected_completion,
+"start_date": body.start_date or now[:10],  # or None
+"site_lng": body.site_lng,
     }
     await db.projects.insert_one(doc)
     doc.pop("_id", None)
@@ -967,3 +994,261 @@ async def delete_document(project_id: str, document_id: str):
     
     await _log_activity(project_id, "Admin", f"Deleted Document: {target['name']}", "Documents")
     return {"success": True}
+
+# ============================================================================
+# QUALITY INSPECTIONS MANAGEMENT
+# ============================================================================
+
+class QualityInspectionBody(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    category: str  # 'Foundation', 'Structure', 'MEP', 'Finishing', 'General'
+    status: str = "pending"  # 'passed', 'rectification', 'in_progress', 'pending'
+    inspector_name: str = Field(..., min_length=2)
+    remarks: Optional[str] = None
+    photo_url: Optional[str] = None  # Single verified image as requested
+    inspected_at: Optional[str] = None
+
+class QualityInspectionUpdateBody(QualityInspectionBody):
+    pass
+
+
+@proj_router.post("/admin/projects/{project_id}/quality", dependencies=[Depends(require_admin)])
+async def create_quality_inspection(project_id: str, body: QualityInspectionBody):
+    """Admin logs a new quality inspection audit."""
+    p = await db.projects.find_one({"id": project_id}, {"id": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    await db.projects.update_one(
+        {"id": project_id, "$or": [{"quality_inspections": {"$exists": False}}, {"quality_inspections": None}]},
+        {"$set": {"quality_inspections": []}}
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    inspection_data = body.model_dump()
+    inspection_data["id"] = f"qual_{uuid.uuid4().hex[:10]}"
+    inspection_data["created_at"] = now
+    inspection_data["updated_at"] = now
+    if not inspection_data["inspected_at"]:
+        inspection_data["inspected_at"] = now
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$push": {"quality_inspections": {"$each": [inspection_data], "$position": 0}}, "$set": {"updated_at": now}}
+    )
+
+    await _log_activity(project_id, "Quality Team", f"Logged Quality Audit: {body.name} ({body.status.upper()})", "Quality")
+    
+    # 🔔 Notify Client via App + Email
+    if body.status == "passed":
+        asyncio.create_task(_push_notification(
+            project_id, "Quality Check Passed ✅", 
+            f"The '{body.name}' inspection has been cleared by {body.inspector_name}.", 
+            "/portal/quality", "quality"
+        ))
+    elif body.status == "rectification":
+        asyncio.create_task(_push_notification(
+            project_id, "Quality Rectification Required ⚠️", 
+            f"The '{body.name}' inspection flagged items for rectification. Our team is resolving this immediately.", 
+            "/portal/quality", "quality"
+        ))
+    # 🔔 Notify Client via App + Email (All Statuses)
+    if body.status == "passed":
+        notif_title, notif_msg = "Quality Check Passed ✅", f"The '{body.name}' inspection has been cleared by {body.inspector_name}."
+    elif body.status == "rectification":
+        notif_title, notif_msg = "Quality Rectification Required ⚠️", f"The '{body.name}' inspection flagged items for rectification. Our team is resolving this."
+    elif body.status == "in_progress":
+        notif_title, notif_msg = "Quality Audit In Progress ⏳", f"The quality inspection for '{body.name}' is currently underway by {body.inspector_name}."
+    else: # pending
+        notif_title, notif_msg = "Quality Audit Scheduled 📅", f"A new quality check for '{body.name}' has been scheduled."
+
+    asyncio.create_task(_push_notification(
+        project_id, notif_title, notif_msg, "/portal/quality", "quality"
+    ))
+    return {"success": True, "inspection": inspection_data}
+
+
+@proj_router.put("/admin/projects/{project_id}/quality/{inspection_id}", dependencies=[Depends(require_admin)])
+async def update_quality_inspection(project_id: str, inspection_id: str, body: QualityInspectionUpdateBody):
+    """Admin updates an existing quality inspection (e.g. changing status from rectification to passed, updating image)."""
+    p = await db.projects.find_one({"id": project_id}, {"id": 1, "quality_inspections": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    inspections = p.get("quality_inspections") or []
+    idx = next((i for i, q in enumerate(inspections) if q["id"] == inspection_id), -1)
+    if idx == -1:
+        raise HTTPException(status_code=404, detail="Quality inspection not found")
+
+    old_status = inspections[idx].get("status")
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = body.model_dump()
+    update_data["id"] = inspection_id
+    update_data["created_at"] = inspections[idx].get("created_at", now)
+    update_data["updated_at"] = now
+    if not update_data["inspected_at"]:
+        update_data["inspected_at"] = inspections[idx].get("inspected_at", now)
+
+    inspections[idx] = update_data
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$set": {"quality_inspections": inspections, "updated_at": now}}
+    )
+
+    await _log_activity(project_id, "Quality Team", f"Updated Quality Audit: {body.name}", "Quality")
+
+    # Notify if status changed to passed
+    if old_status != "passed" and body.status == "passed":
+        asyncio.create_task(_push_notification(
+            project_id, "Quality Rectification Cleared ✅", 
+            f"The '{body.name}' inspection has been fully rectified and passed.", 
+            "/portal/quality", "quality"
+        ))
+    # 🔔 Notify if status changed
+    if old_status != body.status:
+        if body.status == "passed":
+            notif_title, notif_msg = "Quality Rectification Cleared ✅", f"The '{body.name}' inspection has been fully rectified and passed."
+        elif body.status == "rectification":
+            notif_title, notif_msg = "Quality Rectification Required ⚠️", f"The '{body.name}' inspection flagged items for rectification."
+        elif body.status == "in_progress":
+            notif_title, notif_msg = "Quality Audit In Progress ⏳", f"The '{body.name}' inspection is now in progress."
+        else:
+            notif_title, notif_msg = "Quality Audit Scheduled 📅", f"The '{body.name}' inspection has been scheduled."
+
+        asyncio.create_task(_push_notification(
+            project_id, notif_title, notif_msg, "/portal/quality", "quality"
+        ))
+    return {"success": True, "inspection": update_data}
+
+
+@proj_router.delete("/admin/projects/{project_id}/quality/{inspection_id}", dependencies=[Depends(require_admin)])
+async def delete_quality_inspection(project_id: str, inspection_id: str):
+    p = await db.projects.find_one({"id": project_id}, {"id": 1, "quality_inspections": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$pull": {"quality_inspections": {"id": inspection_id}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"success": True}
+
+# warranty and maintainence 
+@proj_router.put("/admin/projects/{project_id}/warranty", dependencies=[Depends(require_admin)])
+async def update_warranty(project_id: str, body: WarrantyUpdateBody):
+    """Admin configures the Warranty timer."""
+    p = await db.projects.find_one({"id": project_id}, {"id": 1, "warranty_active": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    is_active = bool(body.warranty_start_date and body.warranty_years)
+    was_active = p.get("warranty_active", False)
+    
+    update_data = {
+        "warranty_start_date": body.warranty_start_date,
+        "warranty_years": body.warranty_years,
+        "warranty_active": is_active,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.projects.update_one({"id": project_id}, {"$set": update_data})
+    
+    # Notify client if warranty just got activated
+    if is_active and not was_active:
+        await _log_activity(project_id, "Admin", f"{body.warranty_years}-Year Warranty Activated", "System")
+        asyncio.create_task(_push_notification(
+            project_id, "Warranty Activated 🛡️", 
+            f"Your {body.warranty_years}-Year Post-Handover Warranty is now active. View your benefits in the Maintenance tab.", 
+            "/portal/maintenance", "system"
+        ))
+
+    return {"success": True, "warranty": update_data}
+
+
+@proj_router.post("/portal/my-project/maintenance")
+async def portal_raise_ticket(body: MaintenanceTicketCreateBody, customer=Depends(get_current_customer)):
+    """Client raises a maintenance ticket from the portal."""
+    email = (customer.get("email") or "").lower()
+    proj = await db.projects.find_one(
+        {"$or": [{"customer_email": email}, {"team_directory.email": email}]},
+        {"id": 1, "customer_email": 1, "team_directory": 1}
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    _enforce_full_access(proj, email)
+
+    await db.projects.update_one(
+        {"id": proj["id"], "$or": [{"maintenance_tickets": {"$exists": False}}, {"maintenance_tickets": None}]},
+        {"$set": {"maintenance_tickets": []}}
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    ticket_id = f"TKT-{random.randint(1000, 9999)}"
+    
+    ticket = {
+        "id": ticket_id,
+        "title": body.title.strip(),
+        "category": body.category,
+        "priority": body.priority,
+        "description": body.description.strip(),
+        "photo_urls": body.photo_urls,
+        "status": "open",
+        "admin_notes": None,
+        "raised_at": now,
+        "raised_by": customer.get("name") or "Client",
+        "resolved_at": None,
+        "updated_at": now
+    }
+
+    await db.projects.update_one(
+        {"id": proj["id"]},
+        {"$push": {"maintenance_tickets": {"$each": [ticket], "$position": 0}}, "$set": {"updated_at": now}}
+    )
+
+    await _log_activity(proj["id"], customer.get("name") or "Client", f"Raised Maintenance Ticket: {ticket_id}", "System")
+    return {"success": True, "ticket": ticket}
+
+
+@proj_router.put("/admin/projects/{project_id}/maintenance/{ticket_id}", dependencies=[Depends(require_admin)])
+async def admin_update_ticket(project_id: str, ticket_id: str, body: MaintenanceTicketUpdateBody):
+    """Admin updates ticket status and adds notes."""
+    p = await db.projects.find_one({"id": project_id}, {"id": 1, "maintenance_tickets": 1})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    tickets = p.get("maintenance_tickets") or []
+    idx = next((i for i, t in enumerate(tickets) if t["id"] == ticket_id), -1)
+    if idx == -1:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    old_status = tickets[idx].get("status")
+    now = datetime.now(timezone.utc).isoformat()
+    
+    tickets[idx]["status"] = body.status
+    tickets[idx]["admin_notes"] = body.admin_notes
+    tickets[idx]["updated_at"] = now
+    
+    if body.status == "resolved" and old_status != "resolved":
+        tickets[idx]["resolved_at"] = now
+    elif body.status != "resolved":
+        tickets[idx]["resolved_at"] = None
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$set": {"maintenance_tickets": tickets, "updated_at": now}}
+    )
+
+    # 🔔 Notify Client of Update
+    if old_status != body.status or body.admin_notes != p["maintenance_tickets"][idx].get("admin_notes"):
+        status_display = body.status.replace("_", " ").title()
+        msg = f"Ticket {ticket_id} status is now '{status_display}'."
+        if body.admin_notes:
+            msg += f" Note: {body.admin_notes}"
+        
+        asyncio.create_task(_push_notification(
+            project_id, f"Maintenance Ticket Updated: {ticket_id}", msg, "/portal/maintenance", "system"
+        ))
+
+    return {"success": True, "ticket": tickets[idx]}

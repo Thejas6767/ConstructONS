@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
-import { resolveMediaUrl } from "../../lib/mediaUrl";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
 
 const API_BASE = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000") + "/api";
 const api = axios.create({ baseURL: API_BASE, withCredentials: true });
@@ -93,7 +93,7 @@ export default function AdminClientUsers() {
               </thead>
               <tbody className="divide-y divide-black/5">
                 {filtered.map((c) => (
-                  <tr key={c.user_id} className="hover:bg-[#F2F2F2]/50 transition">
+                  <tr key={c.user_id || c.email} className="hover:bg-[#F2F2F2]/50 transition">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         {c.picture ? (
@@ -226,4 +226,4 @@ function ClientDetailModal({ user, onClose }) {
       </div>
     </div>
   );
-}s
+}

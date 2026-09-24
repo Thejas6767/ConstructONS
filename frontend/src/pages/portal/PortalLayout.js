@@ -16,6 +16,51 @@ import PortalTopBar from "./components/PortalTopBar";
 import OnboardingWizard from "../../components/site/OnboardingWizard";
 import PortalAIChatWidget from "./components/PortalAIChatWidget";
 
+/* =========================================================
+   CUSTOM POWER BUTTON O SVG (Matches ConstructONS Logo)
+========================================================= */
+function PowerIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+/* =========================================================
+   BRAND LOCKUP COMPONENT (Power Button 'O' + Orange 'NS')
+========================================================= */
+function BrandLockup({ tone = "light", size = "md" }) {
+  const isDark = tone === "dark";
+  const textColor = isDark ? "text-white" : "text-[#000F1B]";
+  const orangeColor = "text-[#FF5A00]";
+
+  const sizeClasses = {
+    xs: "text-sm",
+    sm: "text-base",
+    md: "text-xl",
+    lg: "text-2xl",
+  }[size] || "text-xl";
+
+  const iconSizes = {
+    xs: "w-3.5 h-3.5",
+    sm: "w-4 h-4",
+    md: "w-5 h-5",
+    lg: "w-6 h-6",
+  }[size] || "w-5 h-5";
+
+  return (
+    <div className={`font-black tracking-tight flex items-center ${sizeClasses}`}>
+      <span className={textColor}>Construct</span>
+      <span className={`inline-flex items-center ${orangeColor}`}>
+        <PowerIcon className={`${iconSizes} mx-[0.5px] stroke-[3.5]`} />
+        <span>NS</span>
+      </span>
+    </div>
+  );
+}
+
 function NoProjectView() {
   const { user, logout, reload, loading } = usePortal();
   const firstName = user?.name?.split(" ")[0] || "Client";
@@ -29,8 +74,7 @@ function NoProjectView() {
       {/* Top Bar */}
       <header className="h-16 bg-white border-b border-black/5 px-4 sm:px-8 flex items-center justify-between shrink-0">
         <Link to="/" className="flex items-center gap-2.5 group">
-          <img src="/logo.webp" alt="ConstructONS Logo" className="h-7 w-auto object-contain" />
-          
+          <BrandLockup tone="light" size="sm" />
         </Link>
         
         <div className="flex items-center gap-3">
@@ -153,7 +197,6 @@ function PortalShell() {
 
   // 3. FULL PORTAL ACCESS
   return (
-
     <div className="h-screen bg-[#F5F6F8] font-['Poppins'] text-[#111111] flex overflow-hidden">
       <Toaster richColors position="top-right" />
       
@@ -164,11 +207,10 @@ function PortalShell() {
         
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
-            <PortalAIChatWidget />
+          <PortalAIChatWidget />
         </main>
       </div>
     </div>
-
   );
 }
 

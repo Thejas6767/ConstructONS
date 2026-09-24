@@ -337,34 +337,36 @@ function ComparisonGrid({ traditional = [], constructons = [] }) {
 function StatsBanner({ stats }) {
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 md:pb-24 lg:px-8">
-      <div className="flex flex-col items-center rounded-full bg-[#030914] px-6 py-5 text-white shadow-2xl md:flex-row md:justify-around md:px-12 md:py-6">
-        {stats.map((s, idx) => {
-          return (
-            <React.Fragment key={idx}>
-              <div className="flex items-center gap-4 py-3 md:py-0">
-                {/* ICON CONTAINER */}
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0D1829]">
-                  <DynamicLucideIcon name={s.icon} className="h-6 w-6 text-[#FF5A00]" />
+      <div className="rounded-3xl bg-[#030914] p-6 text-white shadow-2xl md:rounded-full md:px-12 md:py-6">
+        <div className="grid grid-cols-2 gap-6 md:flex md:flex-row md:items-center md:justify-around md:gap-0">
+          {stats.map((s, idx) => {
+            return (
+              <React.Fragment key={idx}>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 py-2 md:py-0">
+                  {/* ICON CONTAINER */}
+                  <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0D1829]">
+                    <DynamicLucideIcon name={s.icon} className="h-5 w-5 sm:h-6 sm:w-6 text-[#FF5A00]" />
+                  </div>
+
+                  {/* STAT TEXT */}
+                  <div className="flex flex-col">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white">
+                      {s.value}
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-400 md:text-sm">
+                      {s.label}
+                    </span>
+                  </div>
                 </div>
 
-                {/* STAT TEXT */}
-                <div className="flex flex-col">
-                  <span className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-                    {s.value}
-                  </span>
-                  <span className="text-xs font-semibold text-slate-400 sm:text-sm">
-                    {s.label}
-                  </span>
-                </div>
-              </div>
-
-              {/* VERTICAL DIVIDER LINE */}
-              {idx < stats.length - 1 && (
-                <div className="hidden h-10 w-[1px] bg-white/10 md:block" />
-              )}
-            </React.Fragment>
-          );
-        })}
+                {/* VERTICAL DIVIDER LINE */}
+                {idx < stats.length - 1 && (
+                  <div className="hidden h-10 w-[1px] bg-white/10 md:block" />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

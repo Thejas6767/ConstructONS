@@ -22,7 +22,6 @@ import {
 
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
-import LogoMark from "@/components/site/LogoMark";
 import { publicApi } from "@/lib/api";
 
 
@@ -36,43 +35,65 @@ function cn(...classes) {
 
 
 /* =========================================================
-   ANIMATED NUMBER
+   DYNAMIC LUCIDE ICON HELPER
+========================================================= */
+function DynamicLucideIcon({ name, className }) {
+  // Fallback icon if name is not found or invalid
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    </svg>
+  );
+}
+
+
+/* =========================================================
+   STATS BANNER COMPONENT
 ========================================================= */
 
-function AnimatedNumber({
-  value,
-  suffix = "",
-}) {
-  const ref = useRef(null);
-
-  const isInView = useInView(ref, {
-    once: true,
-    margin: "-50px",
-  });
-
-  const numeric =
-    parseInt(String(value).replace(/\D/g, "")) || 0;
-
-  const spring = useSpring(0, {
-    bounce: 0,
-    duration: 2200,
-  });
-
-  const out = useTransform(
-    spring,
-    (v) => Math.round(v) + suffix
-  );
-
-  useEffect(() => {
-    if (isInView) {
-      spring.set(numeric);
-    }
-  }, [isInView, numeric, spring]);
-
+function StatsBanner({ stats }) {
   return (
-    <motion.span ref={ref}>
-      {out}
-    </motion.span>
+    <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 md:pb-24 lg:px-8">
+      <div className="rounded-3xl bg-[#030914] p-6 text-white shadow-2xl md:rounded-full md:px-12 md:py-6">
+        <div className="grid grid-cols-2 gap-6 md:flex md:flex-row md:items-center md:justify-around md:gap-0">
+          {stats.map((s, idx) => {
+            return (
+              <React.Fragment key={idx}>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 py-2 md:py-0">
+                  {/* ICON CONTAINER */}
+                  <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0D1829]">
+                    <DynamicLucideIcon name={s.icon} className="h-5 w-5 sm:h-6 sm:w-6 text-[#FF5A00]" />
+                  </div>
+
+                  {/* STAT TEXT */}
+                  <div className="flex flex-col">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white">
+                      {s.value}
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-400 md:text-sm">
+                      {s.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* VERTICAL DIVIDER LINE */}
+                {idx < stats.length - 1 && (
+                  <div className="hidden h-10 w-[1px] bg-white/10 md:block" />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -99,142 +120,6 @@ function PowerIcon(props) {
 
 
 /* =========================================================
-   STAT ICONS
-   DIRECT SVG - NO EXTERNAL DEPENDENCY
-========================================================= */
-function StatIcon({ type }) {
-  const iconStyle = {
-    width: "26px",
-    height: "26px",
-    display: "block",
-    flexShrink: 0,
-  };
-
-  /* HOME */
-  if (type === "Home") {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={iconStyle}
-      >
-        <path
-          d="M3 10.5L12 3L21 10.5V21H3V10.5Z"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M9 21V14H15V21"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  /* AWARD / EXPERIENCE */
-  if (type === "Award") {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={iconStyle}
-      >
-        <circle
-          cx="12"
-          cy="9"
-          r="6"
-          stroke="#FF5A00"
-          strokeWidth="2"
-        />
-        <path
-          d="M8.5 14L7 21L12 18L17 21L15.5 14"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  /* CLOCK / DELIVERY */
-  if (type === "Clock") {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={iconStyle}
-      >
-        <circle
-          cx="12"
-          cy="12"
-          r="9"
-          stroke="#FF5A00"
-          strokeWidth="2"
-        />
-        <path
-          d="M12 7V12L15.5 14"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  /* USERS / TEAM */
-  if (type === "Users") {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={iconStyle}
-      >
-        <circle
-          cx="9"
-          cy="8"
-          r="3.5"
-          stroke="#FF5A00"
-          strokeWidth="2"
-        />
-        <path
-          d="M3 20C3 16.5 5.7 13.8 9 13.8C12.3 13.8 15 16.5 15 20"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <circle
-          cx="17"
-          cy="9"
-          r="2.5"
-          stroke="#FF5A00"
-          strokeWidth="2"
-        />
-        <path
-          d="M15 15C18.2 14.8 20.5 16.8 20.5 19.5"
-          stroke="#FF5A00"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-
-  return null;
-}
-
-
-/* =========================================================
    MAIN PAGE COMPONENT
 ========================================================= */
 
@@ -243,7 +128,6 @@ export default function AboutPage() {
   const [team, setTeam] = useState([]);
   const [faqs, setFaqs] = useState([]);
   const [settings, setSettings] = useState(null);
-
 
   useEffect(() => {
 
@@ -264,7 +148,6 @@ export default function AboutPage() {
 
   }, []);
 
-
   const formattedTeam = team.map((m) => ({
     id: m.id || m.name,
     name: m.name,
@@ -276,6 +159,15 @@ export default function AboutPage() {
     accent: "#FF5A00",
   }));
 
+  // Fallback stats if backend settings don't provide them yet
+  const defaultStats = [
+    { value: "250+", label: "Homes Planned", icon: "Home" },
+    { value: "10+", label: "Years Experience", icon: "Award" },
+    { value: "98%", label: "On-Time Delivery", icon: "Clock" },
+    { value: "50+", label: "Expert Professionals", icon: "Users" },
+  ];
+
+  const pageStats = settings?.stats || defaultStats;
 
   return (
 
@@ -401,7 +293,7 @@ export default function AboutPage() {
                   delay: 0.8,
                   duration: 0.8,
                 }}
-                className="absolute left-4 bottom-6 md:left-8 md:bottom-12 pointer-events-auto"
+                className="absolute left-4 bottom-6 md:left-8 md:tw-12 pointer-events-auto"
               >
 
                 <div className="max-w-[200px] sm:max-w-[240px] bg-white/85 backdrop-blur-md p-4 sm:p-5 rounded-xl border border-black/5 shadow-xl">
@@ -477,460 +369,11 @@ export default function AboutPage() {
 
 
         {/* =================================================
-            STATS SECTION
+            STATS SECTION (USING STATSBANNER)
         ================================================= */}
 
         <section className="py-12 md:py-16 bg-white relative z-30">
-
-          <div className="container-wide">
-
-            <div
-              className="
-                relative
-                overflow-hidden
-                bg-[#000F1B]
-                rounded-[2.5rem]
-                md:rounded-full
-                py-8
-                md:py-10
-                px-5
-                sm:px-8
-                md:px-12
-                border
-                border-white/10
-                shadow-2xl
-                shadow-[#000F1B]/20
-              "
-            >
-
-              {/* Glowing decorative circles */}
-
-              <div
-                className="
-                  pointer-events-none
-                  absolute
-                  -right-10
-                  -bottom-10
-                  w-60
-                  h-60
-                  bg-[#FF5A00]/15
-                  rounded-full
-                  blur-3xl
-                "
-              />
-
-              <div
-                className="
-                  pointer-events-none
-                  absolute
-                  -left-10
-                  -top-10
-                  w-60
-                  h-60
-                  bg-[#FF5A00]/10
-                  rounded-full
-                  blur-3xl
-                "
-              />
-
-
-              {/* STATS GRID */}
-
-              <div
-                className="
-                  relative
-                  z-10
-                  grid
-                  grid-cols-2
-                  md:grid-cols-4
-                  gap-y-8
-                  md:gap-y-0
-                "
-              >
-
-
-                {/* =========================================
-                    HOME
-                ========================================= */}
-
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    y: 20,
-                  }}
-                  whileInView={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  viewport={{
-                    once: true,
-                    amount: 0.3,
-                  }}
-                  transition={{
-                    duration: 0.6,
-                  }}
-                  className="
-                    flex
-                    items-center
-                    justify-center
-                    gap-3
-                    sm:gap-4
-                    px-3
-                    md:px-5
-                  "
-                >
-
-                  <div
-                    className="
-                      flex
-                      items-center
-                      justify-center
-                      shrink-0
-                      rounded-[1.25rem]
-                      border
-                      border-white/10
-                      bg-[#132230]
-                      shadow-inner
-                    "
-                    style={{
-                      width: "56px",
-                      height: "56px",
-                      minWidth: "56px",
-                      minHeight: "56px",
-                    }}
-                  >
-                    <StatIcon type="Home" />
-                  </div>
-
-
-                  <div className="text-left">
-
-                    <div
-                      className="
-                        text-2xl
-                        sm:text-3xl
-                        md:text-4xl
-                        font-extrabold
-                        leading-none
-                        text-white
-                      "
-                    >
-                      <AnimatedNumber
-                        value="250"
-                        suffix="+"
-                      />
-                    </div>
-
-                    <div
-                      className="
-                        mt-1
-                        text-[9px]
-                        sm:text-[10px]
-                        md:text-xs
-                        font-semibold
-                        tracking-wider
-                        text-white/60
-                      "
-                    >
-                      Homes Planned
-                    </div>
-
-                  </div>
-
-                </motion.div>
-
-
-
-                {/* =========================================
-                    AWARD
-                ========================================= */}
-
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    y: 20,
-                  }}
-                  whileInView={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  viewport={{
-                    once: true,
-                    amount: 0.3,
-                  }}
-                  transition={{
-                    duration: 0.6,
-                    delay: 0.1,
-                  }}
-                  className="
-                    flex
-                    items-center
-                    justify-center
-                    gap-3
-                    sm:gap-4
-                    px-3
-                    md:px-5
-                    md:border-l
-                    md:border-white/10
-                  "
-                >
-
-                  <div
-                    className="
-                      flex
-                      items-center
-                      justify-center
-                      shrink-0
-                      rounded-[1.25rem]
-                      border
-                      border-white/10
-                      bg-[#132230]
-                      shadow-inner
-                    "
-                    style={{
-                      width: "56px",
-                      height: "56px",
-                      minWidth: "56px",
-                      minHeight: "56px",
-                    }}
-                  >
-                    <StatIcon type="Award" />
-                  </div>
-
-
-                  <div className="text-left">
-
-                    <div
-                      className="
-                        text-2xl
-                        sm:text-3xl
-                        md:text-4xl
-                        font-extrabold
-                        leading-none
-                        text-white
-                      "
-                    >
-                      <AnimatedNumber
-                        value="10"
-                        suffix="+"
-                      />
-                    </div>
-
-                    <div
-                      className="
-                        mt-1
-                        text-[9px]
-                        sm:text-[10px]
-                        md:text-xs
-                        font-semibold
-                        tracking-wider
-                        text-white/60
-                      "
-                    >
-                      Years Experience
-                    </div>
-
-                  </div>
-
-                </motion.div>
-
-
-
-                {/* =========================================
-                    CLOCK
-                ========================================= */}
-
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    y: 20,
-                  }}
-                  whileInView={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  viewport={{
-                    once: true,
-                    amount: 0.3,
-                  }}
-                  transition={{
-                    duration: 0.6,
-                    delay: 0.2,
-                  }}
-                  className="
-                    flex
-                    items-center
-                    justify-center
-                    gap-3
-                    sm:gap-4
-                    px-3
-                    md:px-5
-                    md:border-l
-                    md:border-white/10
-                  "
-                >
-
-                  <div
-                    className="
-                      flex
-                      items-center
-                      justify-center
-                      shrink-0
-                      rounded-[1.25rem]
-                      border
-                      border-white/10
-                      bg-[#132230]
-                      shadow-inner
-                    "
-                    style={{
-                      width: "56px",
-                      height: "56px",
-                      minWidth: "56px",
-                      minHeight: "56px",
-                    }}
-                  >
-                    <StatIcon type="Clock" />
-                  </div>
-
-
-                  <div className="text-left">
-
-                    <div
-                      className="
-                        text-2xl
-                        sm:text-3xl
-                        md:text-4xl
-                        font-extrabold
-                        leading-none
-                        text-white
-                      "
-                    >
-                      <AnimatedNumber
-                        value="98"
-                        suffix="%"
-                      />
-                    </div>
-
-                    <div
-                      className="
-                        mt-1
-                        text-[9px]
-                        sm:text-[10px]
-                        md:text-xs
-                        font-semibold
-                        tracking-wider
-                        text-white/60
-                      "
-                    >
-                      On-Time Delivery
-                    </div>
-
-                  </div>
-
-                </motion.div>
-
-
-
-                {/* =========================================
-                    USERS
-                ========================================= */}
-
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    y: 20,
-                  }}
-                  whileInView={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  viewport={{
-                    once: true,
-                    amount: 0.3,
-                  }}
-                  transition={{
-                    duration: 0.6,
-                    delay: 0.3,
-                  }}
-                  className="
-                    flex
-                    items-center
-                    justify-center
-                    gap-3
-                    sm:gap-4
-                    px-3
-                    md:px-5
-                    md:border-l
-                    md:border-white/10
-                  "
-                >
-
-                  <div
-                    className="
-                      flex
-                      items-center
-                      justify-center
-                      shrink-0
-                      rounded-[1.25rem]
-                      border
-                      border-white/10
-                      bg-[#132230]
-                      shadow-inner
-                    "
-                    style={{
-                      width: "56px",
-                      height: "56px",
-                      minWidth: "56px",
-                      minHeight: "56px",
-                    }}
-                  >
-                    <StatIcon type="Users" />
-                  </div>
-
-
-                  <div className="text-left">
-
-                    <div
-                      className="
-                        text-2xl
-                        sm:text-3xl
-                        md:text-4xl
-                        font-extrabold
-                        leading-none
-                        text-white
-                      "
-                    >
-                      <AnimatedNumber
-                        value="50"
-                        suffix="+"
-                      />
-                    </div>
-
-                    <div
-                      className="
-                        mt-1
-                        text-[9px]
-                        sm:text-[10px]
-                        md:text-xs
-                        font-semibold
-                        tracking-wider
-                        text-white/60
-                      "
-                    >
-                      Expert Professionals
-                    </div>
-
-                  </div>
-
-                </motion.div>
-
-
-              </div>
-
-            </div>
-
-          </div>
-
+          <StatsBanner stats={pageStats} />
         </section>
 
 

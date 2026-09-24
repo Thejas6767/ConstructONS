@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Form, Response, Header, Request
 from fastapi.responses import Response as FastAPIResponse
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import logging
+import asyncio
 
 from db import db, serialize_doc
 from auth import (
@@ -20,8 +21,10 @@ from models import (
 
 from customer_auth import (
     GoogleAuthBody, process_google_auth, get_current_customer,
-    logout_customer as _logout_customer,
+    logout_customer as _logout_customer, CustomerProfileUpdate,
 )
+
+from ai_service import chat_public_gemini, chat_portal_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +105,6 @@ async def admin_reseed():
 # ============================================================================
 # Customer Auth & Profile Settings
 # ============================================================================
-from customer_auth import (
-    GoogleAuthBody, process_google_auth, get_current_customer,
-    logout_customer as _logout_customer, CustomerProfileUpdate
-)
-
 @router.post("/customer/auth/google")
 async def customer_process_google(body: GoogleAuthBody, response: FastAPIResponse):
     """Authenticate customer directly using Google ID token credential."""
@@ -337,6 +335,14 @@ class RecommendRequest(BaseModel):
     family_size: str
     style: Optional[str] = None
     smart_home: str = "no"
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_city: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    city: Optional[str] = None
 
 
 @router.post("/recommend")
@@ -394,6 +400,11 @@ async def recommend_package(body: RecommendRequest):
         shortlist = [h for h in homes if (h.get("bedrooms") or 0) >= needed_bhk]
     shortlist = shortlist[:3]
 
+    c_name = body.contact_name or body.name
+    c_phone = body.contact_phone or body.phone
+    c_email = body.contact_email or body.email
+    c_city = body.contact_city or body.city
+
     submission = QuizSubmission(
         budget=body.budget,
         family_size=body.family_size,
@@ -404,9 +415,33 @@ async def recommend_package(body: RecommendRequest):
         shortlisted_home_slugs=[h.get("slug") for h in shortlist if h.get("slug")],
         shortlisted_home_names=[h.get("name") for h in shortlist if h.get("name")],
         score=scored[0][0],
+        contact_name=c_name,
+        contact_phone=c_phone,
+        contact_email=c_email,
+        contact_city=c_city,
+        status="contact_captured" if (c_phone or c_email) else "new",
         source="quiz",
     )
     await db.quiz_submissions.insert_one(submission.model_dump())
+
+    # Automatically log lead if contact info was provided
+    if c_phone or c_email or c_name:
+        lead = Lead(
+            name=c_name or "Quiz User",
+            phone=c_phone or "",
+            email=c_email,
+            city=c_city,
+            interested_package=best.get("name"),
+            message=f"Quiz submitted: Budget={body.budget}, Family={body.family_size}, Style={body.style or 'Any'}",
+            source="quiz",
+            quiz_submission_id=submission.id
+        )
+        lead_doc = lead.model_dump()
+        await db.leads.insert_one(lead_doc)
+        await db.quiz_submissions.update_one(
+            {"id": submission.id},
+            {"$set": {"converted_to_lead_id": lead.id, "status": "converted"}}
+        )
 
     return {
         "recommended_package": best,
@@ -425,6 +460,60 @@ class QuizSubmissionUpdate(BaseModel):
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
     contact_city: Optional[str] = None
+
+class QuizContactCaptureRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    city: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_city: Optional[str] = None
+
+
+@router.post("/quiz-submissions/{id}/contact")
+async def capture_quiz_contact(id: str, body: QuizContactCaptureRequest):
+    """Public endpoint to attach contact info to an existing quiz submission."""
+    sub = await db.quiz_submissions.find_one({"id": id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(status_code=404, detail="Quiz submission not found")
+    
+    c_name = body.contact_name or body.name or sub.get("contact_name")
+    c_phone = body.contact_phone or body.phone or sub.get("contact_phone")
+    c_email = body.contact_email or body.email or sub.get("contact_email")
+    c_city = body.contact_city or body.city or sub.get("contact_city")
+
+    update_dict = {
+        "contact_name": c_name,
+        "contact_phone": c_phone,
+        "contact_email": c_email,
+        "contact_city": c_city,
+        "status": "contact_captured",
+        "updated_at": now_iso()
+    }
+
+    # Automatically create a Lead in Admin CRM
+    lead_id = sub.get("converted_to_lead_id")
+    if not lead_id and (c_phone or c_email or c_name):
+        lead = Lead(
+            name=c_name or "Quiz User",
+            phone=c_phone or "",
+            email=c_email,
+            city=c_city,
+            interested_package=sub.get("recommended_package_name"),
+            message=f"Quiz completed & contact captured. Budget={sub.get('budget')}, Family={sub.get('family_size')}",
+            source="quiz",
+            quiz_submission_id=id
+        )
+        lead_doc = lead.model_dump()
+        await db.leads.insert_one(lead_doc)
+        lead_id = lead.id
+        update_dict["converted_to_lead_id"] = lead_id
+        update_dict["status"] = "converted"
+
+    await db.quiz_submissions.update_one({"id": id}, {"$set": update_dict})
+    return {"success": True, "quiz_submission_id": id, "lead_id": lead_id}
 
 
 @router.get("/quiz-submissions", dependencies=[Depends(require_admin)])
@@ -477,11 +566,18 @@ async def notifications_pending(since: Optional[str] = None):
     leads = await db.leads.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
+
     quizzes = await db.quiz_submissions.find(
         {"created_at": {"$gt": since_iso}}, {"_id": 0}
     ).sort("created_at", -1).limit(20).to_list(20)
 
+    recent_projects = await db.projects.find(
+        {"activities.timestamp": {"$gt": since_iso}},
+        {"id": 1, "title": 1, "project_code": 1, "activities": 1}
+    ).to_list(50)
+
     items = []
+
     for l in leads:
         subtitle_parts = [l.get("phone", "")]
         if l.get("interested_home"):
@@ -491,31 +587,131 @@ async def notifications_pending(since: Optional[str] = None):
         items.append({
             "type": "lead",
             "id": l.get("id"),
-            "title": f"New lead — {l.get('name','Unknown')}",
+            "title": f"New lead — {l.get('name', 'Unknown')}",
             "subtitle": " · ".join([p for p in subtitle_parts if p]),
             "created_at": l.get("created_at"),
             "source": l.get("source"),
             "link": "/admin/leads",
         })
+
     for q in quizzes:
-        contact = q.get("contact_name") or "Anonymous"
+        contact = q.get("contact_name") or q.get("contact_phone") or "Anonymous"
         pkg = q.get("recommended_package_name") or "—"
         items.append({
             "type": "quiz",
             "id": q.get("id"),
             "title": f"Quiz submission — {contact}",
-            "subtitle": f"Recommended: {pkg}",
+            "subtitle": f"Recommended: {pkg} · Budget: {q.get('budget','—')}",
             "created_at": q.get("created_at"),
             "link": "/admin/quiz-submissions",
         })
 
+    client_actions = 0
+    admin_markers = ("admin", "site engineer", "system", "procurement", "accounts", "quality team")
+
+    for p in recent_projects:
+        for act in (p.get("activities") or []):
+            ts = act.get("timestamp") or ""
+            if ts <= since_iso:
+                continue
+            user_name = (act.get("user_name") or "").strip()
+            user_l = user_name.lower()
+            if any(m in user_l for m in admin_markers) and "client" not in user_l:
+                action_l = (act.get("action") or "").lower()
+                if not any(k in action_l for k in (
+                    "raised maintenance", "approved drawing", "rejected drawing",
+                    "requested changes", "approved material", "rejected material",
+                    "joined the project",
+                )):
+                    continue
+
+            client_actions += 1
+            proj_label = p.get("project_code") or p.get("title") or "Project"
+            items.append({
+                "type": "project_action",
+                "id": act.get("id") or f"{p.get('id')}-{ts}",
+                "title": f"Client action — {proj_label}",
+                "subtitle": f"{user_name}: {act.get('action') or 'Updated project'}",
+                "created_at": ts,
+                "link": "/admin/projects",
+            })
+
     items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
     return {
-        "items": items,
+        "items": items[:50],
         "now": datetime.now(timezone.utc).isoformat(),
         "leads_count": len(leads),
         "quiz_count": len(quizzes),
+        "client_actions_count": client_actions,
     }
+
+
+# ----------------------- AI Chatbot Endpoints -----------------------
+class PublicChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+class PortalChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+
+@router.post("/ai/chat/public")
+async def public_ai_chat(body: PublicChatRequest, request: Request):
+    """Public Website AI Chatbot (ConstructONS AI Assist)."""
+    from project_routes import apply_rate_limit
+    apply_rate_limit(request, limit=10, window_sec=60)
+
+    reply = await chat_public_gemini(body.message, body.history)
+    return {"reply": reply}
+
+
+@router.post("/ai/chat/portal")
+async def portal_ai_chat(body: PortalChatRequest, customer=Depends(get_current_customer)):
+    """Authenticated Portal Project Advisor with live project context."""
+    email = (customer.get("email") or "").lower()
+    
+    proj = await db.projects.find_one(
+        {"$or": [{"customer_email": email}, {"team_directory.email": email}]},
+        {"_id": 0}
+    )
+    
+    if not proj:
+        raise HTTPException(status_code=404, detail="No linked active project found for this account.")
+
+    context = {
+        "title": proj.get("title"),
+        "project_code": proj.get("project_code"),
+        "status": proj.get("status"),
+        "address": proj.get("address"),
+        "start_date": proj.get("start_date"),
+        "expected_completion": proj.get("expected_completion"),
+        "contract_value": proj.get("contract_value"),
+        "amount_spent": proj.get("amount_spent"),
+        "stages": [
+            {"name": s.get("name"), "status": s.get("status"), "progress_pct": s.get("progress_pct"), "expected_date": s.get("expected_date")}
+            for s in (proj.get("stages") or [])
+        ],
+        "pending_drawings": [
+            {"title": d.get("name"), "category": d.get("category"), "version": d.get("current_version")}
+            for d in (proj.get("drawings") or []) if d.get("status") == "pending"
+        ],
+        "pending_materials": [
+            {"item_name": m.get("item_name"), "category": m.get("category")}
+            for m in (proj.get("materials") or []) if m.get("status") == "pending"
+        ],
+        "quality_inspections_count": len(proj.get("quality_inspections") or []),
+        "recent_activities": [
+            {"action": a.get("action"), "module": a.get("module"), "time": a.get("timestamp")}
+            for a in (proj.get("activities") or [])[:5]
+        ],
+        "warranty_active": proj.get("warranty_active", False),
+        "warranty_years": proj.get("warranty_years", 0)
+    }
+
+    reply = await chat_portal_gemini(body.message, context, body.history)
+    return {"reply": reply}
 
 
 # ----------------------- Generic factory for simpler collections -----------------------
@@ -540,6 +736,18 @@ def make_crud(path: str, collection: str, ModelCls):
 
     @router.delete(f"/{path}/{{id}}", dependencies=[Depends(require_admin)])
     async def _delete(id: str):
+        if collection == "media":
+            upload = await db.media_uploads.find_one({"id": id}, {"_id": 0})
+            if upload:
+                from media_service import delete_object
+                file_target = upload.get("url") or upload.get("storage_path")
+                if file_target:
+                    try:
+                        delete_object(file_target)
+                    except Exception as e:
+                        logger.warning(f"[media] Storage delete failed: {e}")
+                await db.media_uploads.delete_one({"id": id})
+                return {"success": True}
         return await delete_doc(collection, id)
 
 
@@ -783,6 +991,75 @@ async def _generate_cq_ref_number() -> str:
     return f"{prefix}{seq:04d}"
 
 
+AI_JOBS: Dict[str, Dict[str, Any]] = {}
+
+async def _run_ai_quote_job(job_id: str, payload: dict):
+    from ai_service import suggest_custom_quote
+    try:
+        res = await suggest_custom_quote(payload)
+        if res:
+            AI_JOBS[job_id] = {"status": "done", "result": res}
+        else:
+            AI_JOBS[job_id] = {"status": "error", "error": "AI failed to generate quote."}
+    except Exception as e:
+        logger.error(f"[AI Job Error] {e}", exc_info=True)
+        AI_JOBS[job_id] = {"status": "error", "error": str(e)}
+
+
+@router.post("/custom-quotes/ai-suggest", dependencies=[Depends(require_admin)])
+async def ai_suggest_custom_quote(request: Request):
+    """Start an async AI Custom Quote generation job."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    if body.get("package_slug") and not body.get("base_package"):
+        pkg = await db.packages.find_one({"slug": body["package_slug"]}, {"_id": 0})
+        if pkg:
+            body["base_package"] = pkg
+
+    job_id = new_id()
+    AI_JOBS[job_id] = {"status": "processing"}
+    asyncio.create_task(_run_ai_quote_job(job_id, body))
+    return {"job_id": job_id}
+
+
+@router.get("/custom-quotes/ai-suggest/{job_id}", dependencies=[Depends(require_admin)])
+async def ai_suggest_custom_quote_status(job_id: str):
+    """Poll status of an AI Custom Quote generation job."""
+    job = AI_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.post("/custom-quotes/preview", dependencies=[Depends(require_admin)])
+async def preview_custom_quote_pdf(request: Request):
+    """Generate live PDF preview bytes for custom quote builder."""
+    try:
+        doc = await request.json()
+    except Exception:
+        doc = {}
+    settings = await db.site_settings.find_one({"id": "site_settings"}, {"_id": 0}) or {}
+    
+    try:
+        from custom_quote_pdf import generate_custom_quote_pdf
+        pdf_bytes = generate_custom_quote_pdf(doc, settings)
+    except Exception as e:
+        logger.error(f"[Custom Quote PDF Preview Error] {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to render preview: {e}")
+
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="preview.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/custom-quotes", dependencies=[Depends(require_admin)])
 async def list_custom_quotes(status: Optional[str] = None):
     q: Dict[str, Any] = {}
@@ -790,14 +1067,6 @@ async def list_custom_quotes(status: Optional[str] = None):
         q["status"] = status
     cursor = db.custom_quotes.find(q, {"_id": 0}).sort("created_at", -1).limit(200)
     return await cursor.to_list(200)
-
-
-@router.get("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
-async def get_custom_quote(quote_id: str):
-    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Custom quote not found")
-    return doc
 
 
 @router.post("/custom-quotes", dependencies=[Depends(require_admin)])
@@ -813,6 +1082,14 @@ async def create_custom_quote(body: CustomQuote):
     await db.custom_quotes.insert_one(data)
     data.pop("_id", None)
     return data
+
+
+@router.get("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
+async def get_custom_quote(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    return doc
 
 
 @router.put("/custom-quotes/{quote_id}", dependencies=[Depends(require_admin)])
@@ -837,6 +1114,80 @@ async def delete_custom_quote(quote_id: str):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Custom quote not found")
     return {"success": True}
+
+
+@router.get("/custom-quotes/{quote_id}/pdf", dependencies=[Depends(require_admin)])
+async def download_custom_quote_pdf(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    settings = await db.site_settings.find_one({"id": "site_settings"}, {"_id": 0}) or {}
+    
+    try:
+        from custom_quote_pdf import generate_custom_quote_pdf
+        pdf_bytes = generate_custom_quote_pdf(doc, settings)
+    except Exception as e:
+        logger.error(f"[Custom Quote PDF Error] {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {e}")
+
+    filename = f"{(doc.get('ref_number') or 'quote').replace('/', '_')}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/custom-quotes/{quote_id}/public-link", dependencies=[Depends(require_admin)])
+async def generate_public_link(quote_id: str):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    
+    token = doc.get("public_token") or new_id()
+    await db.custom_quotes.update_one({"id": quote_id}, {"$set": {"public_token": token, "updated_at": now_iso()}})
+    return {"public_token": token}
+
+
+@router.post("/custom-quotes/{quote_id}/save-as-template", dependencies=[Depends(require_admin)])
+async def save_quote_as_template(quote_id: str, request: Request):
+    doc = await db.custom_quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom quote not found")
+    
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    tpl = {
+        "id": new_id(),
+        "name": body.get("name") or doc.get("package_name") or "Saved Template",
+        "description": body.get("description") or "",
+        "price_per_sqft": doc.get("price_per_sqft") or 0,
+        "warranty_years": doc.get("warranty_years") or 10,
+        "spec_categories": doc.get("spec_categories") or [],
+        "addons": doc.get("addons") or [],
+        "line_items": doc.get("line_items") or [],
+        "scope_of_work": doc.get("scope_of_work") or [],
+        "exclusions": doc.get("exclusions") or [],
+        "payment_schedule": doc.get("payment_schedule") or [],
+        "terms": doc.get("terms") or "",
+        "intro_note": doc.get("intro_note") or "",
+        "gst_percent": 0,
+        "service_charge_percent": doc.get("service_charge_percent") or 15,
+        "interiors": doc.get("interiors") or [],
+        "tags": body.get("tags") or [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    
+    await db.quote_templates.insert_one(tpl)
+    tpl.pop("_id", None)
+    return tpl
 
 
 # ============================================================================
@@ -896,6 +1247,9 @@ async def upload_media(file: UploadFile = File(...), category: str = Form("gener
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ct}")
 
     data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(status_code=400, detail="Empty file submitted")
+
     cat = (category or "general").lower()
     max_bytes = 1 * 1024 * 1024 if cat == "team" else MAX_UPLOAD_BYTES
 
@@ -903,10 +1257,8 @@ async def upload_media(file: UploadFile = File(...), category: str = Form("gener
         mb = max_bytes / (1024 * 1024)
         raise HTTPException(
             status_code=413,
-            detail=f"File exceeds {mb:g} MB limit",
+            detail=f"File exceeds {mb:g} MB limit for category '{cat}'",
         )
-    if len(data) == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
 
     path = build_storage_path(category, file.filename or "image", ct)
     try:
@@ -938,6 +1290,25 @@ async def upload_media(file: UploadFile = File(...), category: str = Form("gener
         "content_type": ct,
         "original_filename": file.filename,
     }
+
+
+# ----------------------- Media Download -----------------------
+@router.get("/media/{path:path}")
+async def download_media(path: str):
+    """Public read endpoint for uploaded media."""
+    from media_service import get_object
+
+    try:
+        content, fetched_content_type = get_object(path)
+        return FastAPIResponse(
+            content=content,
+            media_type=fetched_content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
 # ============================================================================
 # Package Version History
 # ============================================================================
@@ -956,3 +1327,9 @@ async def _snapshot_package(package_id: str, note: str = "edit"):
         "data": current,
     }
     await db.package_versions.insert_one(snap)
+    cursor = db.package_versions.find(
+        {"package_id": package_id}, {"id": 1}
+    ).sort("snapshot_at", -1).skip(MAX_VERSIONS_PER_PACKAGE)
+    old_ids = [d["id"] async for d in cursor]
+    if old_ids:
+        await db.package_versions.delete_many({"id": {"$in": old_ids}})

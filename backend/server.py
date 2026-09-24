@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 import os
 import logging
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
     from db import db
     from seed import seed_all
     
-    # ⚡ 1. PERFORMANCE: Build MongoDB Indexes for lightning-fast queries
+    # ⚡ Build MongoDB Indexes
     logger.info("Building MongoDB indexes...")
     try:
         await db.projects.create_index("customer_email")
@@ -40,7 +41,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to create indexes: {e}")
 
-    # 2. POPULATE CRITICAL DATA
+    # Seed data if empty
     critical_collections = [
         "homes", "packages", "hero_sections", "site_settings",
         "financial_services", "marketplace_categories",
@@ -60,14 +61,12 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("All critical collections populated — skipping seed.")
 
-    # 3. INITIALIZE MEDIA STORAGE
     try:
         from media_service import init_storage
         init_storage()
     except Exception as e:
         logger.warning(f"Object storage init deferred: {e}")
 
-    # 4. ENSURE ADMIN ACCESS
     try:
         from auth import ensure_admin_seeded
         await ensure_admin_seeded()
@@ -75,7 +74,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Admin seed failed: {e}")
 
-    # 5. SEED INTERIOR LIBRARY
     try:
         count = await db.interior_library.count_documents({})
         if count == 0:
@@ -91,9 +89,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Interior library seed failed: {e}")
 
-    yield  # Server runs while execution pauses here
+    yield  # Server runs
 
-    # --- SHUTDOWN LOGIC ---
     from db import client
     client.close()
 
@@ -104,10 +101,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.include_router(api_router)
-app.include_router(proj_router)
-
-# --- CORS CONFIGURATION ---
+# 🛡️ CORS Middleware MUST be added before routers
 raw_cors = os.environ.get('CORS_ORIGINS', os.environ.get('CORS', '*'))
 
 if raw_cors.strip() == '*':
@@ -128,3 +122,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🛡️ Global Exception Handler ensures CORS headers are ALWAYS present on 500 errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global unhandled error on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server Error: {str(exc)}"},
+    )
+
+app.include_router(api_router)
+app.include_router(proj_router)

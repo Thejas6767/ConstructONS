@@ -44,8 +44,11 @@ export default function SiteReportsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Safe data extraction using optional chaining
-  const rawActivities = project?.activities || [];
+  // Safe data extraction memoized to maintain stable dependency reference
+  const rawActivities = useMemo(
+    () => project?.activities || [],
+    [project?.activities]
+  );
 
   // Memoize filtered activities inside useMemo
   const filteredActivities = useMemo(() => {

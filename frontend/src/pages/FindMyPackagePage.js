@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Check,
-  Home as HomeIcon,
   Download,
   Phone,
   RotateCcw,
@@ -19,6 +18,7 @@ import {
   Bed,
   Bath,
   Layers,
+  Loader2,
 } from "lucide-react";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
@@ -26,7 +26,7 @@ import { publicApi } from "@/lib/api";
 import { useLeadModal } from "@/components/site/LeadModalProvider";
 
 /* ──────────────────────────────────────────────────────────────
-   CURATED UNSPLASH IMAGES (per-option only)
+   CURATED IMAGES
 ────────────────────────────────────────────────────────────── */
 const IMG = {
   budget: {
@@ -137,67 +137,15 @@ const LABELS = {
   smart_home: { yes: "Full automation", partial: "Essentials only", no: "Traditional" },
 };
 
-/* Package details for result screen */
+/* Fallback package details */
 const PACKAGE_DETAILS = {
-  basic: {
-    slug: "basic",
-    name: "Basic Package",
-    tagline: "Smart & Affordable",
-    price: "₹1,499",
-    unit: "/sqft",
-    tone: "Value",
-    highlights: [
-      "ISI-certified structural materials",
-      "Standard specifications, no hidden costs",
-      "Digital progress tracking on the app",
-      "1-year defect warranty · 10-year structural",
-    ],
-  },
-  essential: {
-    slug: "essential",
-    name: "Essential Package",
-    tagline: "Perfect Balance",
-    price: "₹1,799",
-    unit: "/sqft",
-    tone: "Balanced",
-    highlights: [
-      "Upgraded flooring, doors and fittings",
-      "Dedicated project manager",
-      "Live milestone tracking + weekly reports",
-      "10-year structural warranty",
-    ],
-  },
-  standard: {
-    slug: "standard",
-    name: "Standard Package",
-    tagline: "Premium Value",
-    price: "₹2,199",
-    unit: "/sqft",
-    tone: "Premium",
-    highlights: [
-      "Designer finishes and premium fixtures",
-      "Full AI dashboard + document vault",
-      "Multi-level quality inspections",
-      "10-year structural warranty",
-    ],
-  },
-  premium: {
-    slug: "premium",
-    name: "Premium Package",
-    tagline: "Bespoke Luxury",
-    price: "Custom",
-    unit: "quote",
-    tone: "Luxury",
-    highlights: [
-      "Fully customised design + planning",
-      "Luxury materials and imported fittings",
-      "Smart-home integration included",
-      "10-year structural warranty",
-    ],
-  },
+  basic: { slug: "basic", name: "Basic Package", tagline: "Smart & Affordable", price: "₹1,499", unit: "/sqft", tone: "Value", highlights: ["ISI-certified structural materials", "Standard specifications, no hidden costs", "Digital progress tracking on the app", "1-year defect warranty · 10-year structural"] },
+  essential: { slug: "essential", name: "Essential Package", tagline: "Perfect Balance", price: "₹1,799", unit: "/sqft", tone: "Balanced", highlights: ["Upgraded flooring, doors and fittings", "Dedicated project manager", "Live milestone tracking + weekly reports", "10-year structural warranty"] },
+  standard: { slug: "standard", name: "Standard Package", tagline: "Premium Value", price: "₹2,199", unit: "/sqft", tone: "Premium", highlights: ["Designer finishes and premium fixtures", "Full AI dashboard + document vault", "Multi-level quality inspections", "10-year structural warranty"] },
+  premium: { slug: "premium", name: "Premium Package", tagline: "Bespoke Luxury", price: "Custom", unit: "quote", tone: "Luxury", highlights: ["Fully customised design + planning", "Luxury materials and imported fittings", "Smart-home integration included", "10-year structural warranty"] },
 };
 
-function recommendPackage(answers) {
+function recommendPackageLocal(answers) {
   if (answers.budget === "luxury") return PACKAGE_DETAILS.premium;
   if (answers.budget === "premium") return PACKAGE_DETAILS.standard;
   if (answers.budget === "balanced") return PACKAGE_DETAILS.essential;
@@ -245,7 +193,6 @@ function BrandLogoText({ size = "md" }) {
    PAGE
 ────────────────────────────────────────────────────────────── */
 export default function FindMyPackagePage() {
-  const navigate = useNavigate();
   const { open: openLead } = useLeadModal();
 
   const [screen, setScreen] = useState("intro");
@@ -263,19 +210,54 @@ export default function FindMyPackagePage() {
   const total = QUESTIONS.length;
   const current = QUESTIONS[step];
 
+  // FIX: Make API call to backend when quiz is completed
   const pickAnswer = (optionId) => {
     const next = { ...answers, [current.id]: optionId };
     setAnswers(next);
-    setTimeout(() => {
+
+    setTimeout(async () => {
       if (step < total - 1) {
         setStep(step + 1);
       } else {
         setScreen("analysing");
-        const rec = recommendPackage(next);
-        setTimeout(() => {
-          setResult(rec);
-          setScreen("result");
-        }, 2600);
+
+        try {
+          // Send Quiz Answers to Backend API
+          const apiRes = await publicApi.recommendPackage({
+            budget: next.budget || "balanced",
+            family_size: next.family || "3-4",
+            style: next.style || "modern",
+            smart_home: next.smart_home || "no",
+          });
+
+          if (apiRes && apiRes.recommended_package) {
+            const pkg = apiRes.recommended_package;
+            setResult({
+              slug: pkg.slug,
+              name: pkg.name,
+              tagline: pkg.tagline || "Recommended Match",
+              price: pkg.price_display || "Custom",
+              unit: pkg.price_unit || "",
+              tone: pkg.tier?.toUpperCase() || "Value",
+              highlights: pkg.highlights?.length ? pkg.highlights : ["ISI-certified materials", "Digital updates", "Warranty"],
+              submissionId: apiRes.submission_id,
+            });
+            if (apiRes.shortlisted_homes?.length) {
+              setHomes(apiRes.shortlisted_homes);
+            }
+          } else {
+            const localRec = recommendPackageLocal(next);
+            setResult(localRec);
+          }
+        } catch (err) {
+          console.error("Failed to submit quiz to backend:", err);
+          const localRec = recommendPackageLocal(next);
+          setResult(localRec);
+        } finally {
+          setTimeout(() => {
+            setScreen("result");
+          }, 1500);
+        }
       }
     }, 350);
   };
@@ -322,8 +304,8 @@ export default function FindMyPackagePage() {
               answers={answers}
               homes={homes}
               onRestart={restart}
-              onConsult={() => openLead({ source: "quiz-result" })}
-              onBrochure={() => openLead({ source: "quiz-brochure", package: result.name })}
+              onConsult={() => openLead({ source: "quiz-result", quiz_submission_id: result.submissionId })}
+              onBrochure={() => openLead({ source: "quiz-brochure", package: result.name, quiz_submission_id: result.submissionId })}
             />
           )}
         </AnimatePresence>
@@ -361,7 +343,11 @@ function BrandPill({ size = "md", logoOnly = false }) {
 }
 
 /* ──────────────────────────────────────────────────────────────
+<<<<<<< HEAD
    INTRO — Heading modified to remove Discovery references
+=======
+   INTRO
+>>>>>>> 410b931a02d7c955867771b0f896faf136a69120
 ────────────────────────────────────────────────────────────── */
 function IntroScreen({ onBegin }) {
   return (
@@ -518,7 +504,10 @@ function QuizScreen({ step, total, current, answers, onPick, onBack }) {
                   {current.subtitle}
                 </p>
 
+<<<<<<< HEAD
                 {/* Options */}
+=======
+>>>>>>> 410b931a02d7c955867771b0f896faf136a69120
                 <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {current.options.map((opt, i) => {
                     const active = answers[current.id] === opt.id;
@@ -721,14 +710,14 @@ function AnalysingScreen() {
               key={s}
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.4, duration: 0.4 }}
+              transition={{ delay: i * 0.3, duration: 0.3 }}
               className="flex items-center justify-between border-b border-black/10 pb-3"
             >
               <span className="text-sm font-semibold text-[#000F1B]">{s}</span>
               <motion.div
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.4 + 0.3 }}
+                transition={{ delay: i * 0.3 + 0.2 }}
                 className="w-6 h-6 rounded-full bg-[#FF5A00] grid place-items-center"
               >
                 <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
@@ -740,10 +729,11 @@ function AnalysingScreen() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 2, duration: 0.5 }}
-          className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-[#000F1B]/50"
+          transition={{ delay: 1.5, duration: 0.4 }}
+          className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-[#000F1B]/50 flex items-center justify-center gap-2"
         >
-          Your match is ready
+          <Loader2 className="w-4 h-4 animate-spin text-[#FF5A00]" />
+          Connecting to ConstructONS Engine...
         </motion.div>
       </div>
     </motion.section>
@@ -786,16 +776,18 @@ function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure
           </h2>
         </div>
 
+<<<<<<< HEAD
         {/* PACKAGE CARD (Logo-only badge) + WHY */}
+=======
+        {/* PACKAGE CARD + WHY */}
+>>>>>>> 410b931a02d7c955867771b0f896faf136a69120
         <div className="mt-10 grid lg:grid-cols-[1.15fr_1fr] gap-5 items-stretch">
-          {/* Left: package summary card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="relative overflow-hidden rounded-sm bg-gradient-to-br from-[#000F1B] via-[#0B1E30] to-[#000F1B] text-white p-7 sm:p-9 border border-white/10 shadow-[0_30px_60px_-30px_rgba(0,15,27,0.4)]"
           >
-            {/* soft ambient */}
             <div className="pointer-events-none absolute -top-20 -right-20 w-72 h-72 rounded-full bg-[#FF5A00]/20 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-[#FF5A00]/10 blur-3xl" />
 
@@ -1042,7 +1034,7 @@ function SmallHomeCard({ home, isBest }) {
           </div>
           <span className="text-[10px] font-bold text-[#FF5A00] inline-flex items-center gap-0.5 group-hover:gap-1 transition-all">
             View
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </span>
         </div>
       </div>

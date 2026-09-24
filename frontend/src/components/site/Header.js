@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -6,12 +8,12 @@ import { useLeadModal } from "@/components/site/LeadModalProvider";
 import BrandLockup from "@/components/site/BrandLockup";
 
 const NAV = [
-  { label: "Home", to: "/", hash: "#top" },
-  { label: "Home Collection", to: "/#home-collection" },
-  { label: "Packages", to: "/#packages" },
-  { label: "AI Platform", to: "/#ai-platform" },
-  { label: "Marketplace", to: "/#marketplace" },
-  { label: "Financial Services", to: "/#financial" },
+  { label: "Home", to: "/", hash: "top" },
+  { label: "Home Collection", to: "/#home-collection", hash: "home-collection" },
+  { label: "Packages", to: "/#packages", hash: "packages" },
+  { label: "AI Platform", to: "/#ai-platform", hash: "ai-platform" },
+  { label: "Marketplace", to: "/#marketplace", hash: "marketplace" },
+  { label: "Financial Services", to: "/#financial", hash: "financial" },
   { label: "About", to: "/about" },
   { label: "Contact", to: "/contact" },
 ];
@@ -22,6 +24,22 @@ export default function Header() {
 
   const { open: openLead } = useLeadModal();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  // Handle hash scrolling when arriving from other pages or mounting
+  useEffect(() => {
+    if (location.pathname === "/" && location.hash) {
+      const hashId = location.hash.replace("#", "");
+      setTimeout(() => {
+        scrollToSection(hashId);
+      }, 100);
+    }
+  }, [location]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,10 +50,6 @@ export default function Header() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
 
   return (
     <header
@@ -56,7 +70,7 @@ export default function Header() {
             }
           `}
         >
-          {/* Logo - Fixed tone logic */}
+          {/* Logo */}
           <Link
             to="/"
             data-testid="header-logo"
@@ -201,16 +215,48 @@ function NavItem({ item, scrolled }) {
   const location = useLocation();
 
   const handleClick = (event) => {
-    if (!item.hash) return;
+    // If it's a standard page link (like /about or /contact), let React Router Link handle it natively or navigate explicitly
+    if (!item.hash) {
+      return;
+    }
+
     event.preventDefault();
 
+    if (item.hash === "top") {
+      if (location.pathname !== "/") {
+        navigate("/");
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      return;
+    }
+
     if (location.pathname !== "/") {
-      navigate("/");
-      setTimeout(() => scrollToSection(item.hash), 150);
+      navigate(`/#${item.hash}`);
       return;
     }
     scrollToSection(item.hash);
   };
+
+  // Render using standard router Link for separate pages like /about and /contact
+  if (!item.hash) {
+    return (
+      <Link
+        to={item.to}
+        className={`
+          relative rounded-full px-3 py-2.5 text-[13px] font-medium
+          transition-colors duration-200 cursor-pointer
+          ${
+            scrolled
+              ? "text-[#000F1B]/75 hover:bg-[#000F1B]/5 hover:text-[#000F1B]"
+              : "text-white/80 hover:bg-white/10 hover:text-white"
+          }
+        `}
+      >
+        {item.label}
+      </Link>
+    );
+  }
 
   return (
     <a
@@ -218,7 +264,7 @@ function NavItem({ item, scrolled }) {
       onClick={handleClick}
       className={`
         relative rounded-full px-3 py-2.5 text-[13px] font-medium
-        transition-colors duration-200
+        transition-colors duration-200 cursor-pointer
         ${
           scrolled
             ? "text-[#000F1B]/75 hover:bg-[#000F1B]/5 hover:text-[#000F1B]"
@@ -236,17 +282,46 @@ function MobileNavItem({ item, onClose }) {
   const location = useLocation();
 
   const handleClick = (event) => {
-    if (!item.hash) return;
+    if (!item.hash) {
+      onClose();
+      return;
+    }
+
     event.preventDefault();
     onClose();
 
+    if (item.hash === "top") {
+      if (location.pathname !== "/") {
+        navigate("/");
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      return;
+    }
+
     if (location.pathname !== "/") {
-      navigate("/");
-      setTimeout(() => scrollToSection(item.hash), 150);
+      navigate(`/#${item.hash}`);
       return;
     }
     scrollToSection(item.hash);
   };
+
+  if (!item.hash) {
+    return (
+      <Link
+        to={item.to}
+        onClick={onClose}
+        className="
+          flex min-h-12 items-center justify-between rounded-2xl px-4 text-sm
+          font-medium text-[#000F1B]/80 transition-colors cursor-pointer
+          hover:bg-[#000F1B]/5 hover:text-[#FF5A00]
+        "
+      >
+        <span>{item.label}</span>
+        <ArrowRight className="h-4 w-4 opacity-30" />
+      </Link>
+    );
+  }
 
   return (
     <a
@@ -254,7 +329,7 @@ function MobileNavItem({ item, onClose }) {
       onClick={handleClick}
       className="
         flex min-h-12 items-center justify-between rounded-2xl px-4 text-sm
-        font-medium text-[#000F1B]/80 transition-colors
+        font-medium text-[#000F1B]/80 transition-colors cursor-pointer
         hover:bg-[#000F1B]/5 hover:text-[#FF5A00]
       "
     >
@@ -265,7 +340,8 @@ function MobileNavItem({ item, onClose }) {
 }
 
 function scrollToSection(id) {
-  const element = document.getElementById(id);
+  const cleanId = id.startsWith("#") ? id.slice(1) : id;
+  const element = document.getElementById(cleanId);
   if (!element) return;
   element.scrollIntoView({ behavior: "smooth", block: "start" });
 }

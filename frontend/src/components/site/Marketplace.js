@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight, Sparkles, Check } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import LucideIcon from "@/components/site/LucideIcon";
 import { FadeIn, SectionLabel } from "@/components/site/Primitives";
 
@@ -115,13 +115,6 @@ function MarketCard({ item, index }) {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#000F1B]/50 via-transparent to-transparent" />
 
-              {item.coming_soon && (
-                <div className="absolute top-2.5 left-2.5 z-10 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-[#000F1B] text-white px-2 py-1 rounded-full">
-                  <Sparkles className="w-3 h-3 text-[#FF5A00]" />
-                  Soon
-                </div>
-              )}
-
               {item.icon && (
                 <div className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-xl grid place-items-center bg-white/95 text-[#FF5A00] shadow-md">
                   <LucideIcon name={item.icon} className="w-3.5 h-3.5" />
@@ -162,7 +155,7 @@ function MarketCard({ item, index }) {
 
               <div className="mt-4">
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF8A4C]">
-                  {item.coming_soon ? "Coming Soon" : "Available"}
+                  Available
                 </div>
                 <h3 className="mt-1 font-bold text-lg sm:text-xl text-white leading-tight">
                   {item.name}
@@ -172,12 +165,9 @@ function MarketCard({ item, index }) {
                 </p>
               </div>
 
-              {/* Fake benefit chips */}
+              {/* Benefit chips */}
               <ul className="mt-4 space-y-1.5 flex-1">
-                {(item.coming_soon
-                  ? ["Launching soon", "Join waitlist", "Early access"]
-                  : ["Verified partners", "Transparent rates", "On-demand"]
-                ).map((t) => (
+                {["Verified partners", "Transparent rates", "On-demand"].map((t) => (
                   <li key={t} className="flex items-center gap-2 text-[11px] text-white/85">
                     <Check className="w-3.5 h-3.5 text-[#FF5A00] shrink-0" />
                     {t}
@@ -191,7 +181,7 @@ function MarketCard({ item, index }) {
                 onClick={(e) => e.preventDefault()}
                 className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-[#FF5A00] hover:bg-[#E04F00] text-white text-xs font-semibold px-4 py-2.5 transition-colors"
               >
-                {item.coming_soon ? "Notify Me" : "Explore"}
+                Explore
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>

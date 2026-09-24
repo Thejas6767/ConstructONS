@@ -88,9 +88,15 @@ export default function PortalSidebar({ open, onClose }) {
       >
         {/* Brand */}
         <div className="h-16 px-5 flex items-center justify-between border-b border-white/10 shrink-0">
-          <Link to="/portal" className="flex items-center gap-2" onClick={onClose}>
-            <span className="font-bold text-base tracking-tight">
-              Construct<span className="text-[#FF5A00]">ONS™</span>
+          <Link to="/portal" className="flex items-center gap-2.5" onClick={onClose}>
+            <img src="/logo.webp" alt="ConstructONS Logo" className="h-7 w-auto object-contain" />
+            <span className="font-bold text-base tracking-tight text-white">
+              Construct
+              <span className="inline-flex items-center justify-center relative align-middle mx-[0.5px]" style={{ width: '0.8em', height: '0.8em' }}>
+                <span className="absolute inset-0 rounded-full border-[2.5px] border-[#C73E00]" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-[2px] h-[35%] bg-[#C73E00] rounded-full" />
+              </span>
+              NS<span className="text-[#C73E00]">™</span>
             </span>
           </Link>
           <button

@@ -27,10 +27,9 @@ function NoProjectView() {
     <div className="min-h-screen bg-[#F5F6F8] font-['Poppins'] text-[#111111] flex flex-col justify-between selection:bg-[#FF5A00]/20 selection:text-[#000F1B]">
       {/* Top Bar */}
       <header className="h-16 bg-white border-b border-black/5 px-4 sm:px-8 flex items-center justify-between shrink-0">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="font-bold text-lg tracking-tight text-[#000F1B]">
-            Construct<span className="text-[#FF5A00]">ONS™</span>
-          </span>
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <img src="/logo.webp" alt="ConstructONS Logo" className="h-7 w-auto object-contain" />
+          
         </Link>
         
         <div className="flex items-center gap-3">

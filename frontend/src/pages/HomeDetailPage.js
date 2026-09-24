@@ -27,7 +27,6 @@ import { publicApi } from "@/lib/api";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
 import FloatingActions from "@/components/site/FloatingActions";
-import LogoMark from "@/components/site/LogoMark";
 import { useLeadModal } from "@/components/site/LeadModalProvider";
 
 export default function HomeDetailPage() {
@@ -113,9 +112,10 @@ export default function HomeDetailPage() {
             </Link>
 
             <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#000F1B]/40">
-              <span>ConstructONS</span>
+              <span className="text-[#000F1B]">CONSTRUCTONS</span>
+            
               <span className="text-[#000F1B]/20">/</span>
-              <span>Homes</span>
+              <span className="text-[#000F1B]">HOMES</span>
               <span className="text-[#000F1B]/20">/</span>
               <span className="text-[#FF5A00]">{home.name}</span>
             </div>
@@ -123,42 +123,27 @@ export default function HomeDetailPage() {
 
           {/* ═════════════ MAIN GRID ═════════════ */}
           <div className="grid lg:grid-cols-[1.5fr_1fr] gap-5 lg:gap-6 items-start">
-            {/* ── LEFT: Gallery with vertical thumbnails ── */}
+            {/* ── LEFT: Gallery ── */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             >
               <div className="flex flex-col-reverse lg:flex-row gap-3">
-                {/* Vertical thumbnails (desktop) / horizontal strip (mobile) */}
                 {gallery.length > 1 && (
-                  <div
-                    className="
-                      flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible
-                      lg:overflow-y-auto lg:max-h-[600px] no-scrollbar
-                      lg:w-[92px] shrink-0 pb-1 lg:pb-0
-                    "
-                  >
+                  <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto lg:max-h-[600px] no-scrollbar lg:w-[92px] shrink-0 pb-1 lg:pb-0">
                     {gallery.map((g, i) => (
                       <button
                         key={g || `thumb-${i}`}
                         onClick={() => setSelected(i)}
                         data-testid={`gallery-thumb-${i}`}
-                        className={`
-                          relative shrink-0 w-20 h-20 lg:w-full lg:h-24 rounded-xl overflow-hidden
-                          border-2 transition-all
-                          ${
-                            selected === i
-                              ? "border-[#FF5A00] scale-[1.02] shadow-md"
-                              : "border-transparent opacity-55 hover:opacity-100"
-                          }
-                        `}
+                        className={`relative shrink-0 w-20 h-20 lg:w-full lg:h-24 rounded-xl overflow-hidden border-2 transition-all ${
+                          selected === i
+                            ? "border-[#FF5A00] scale-[1.02] shadow-md"
+                            : "border-transparent opacity-55 hover:opacity-100"
+                        }`}
                       >
-                        <img
-                          src={g}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={g} alt="" className="w-full h-full object-cover" />
                         {selected === i && (
                           <span className="absolute inset-x-1 bottom-1 h-0.5 rounded-full bg-[#FF5A00]" />
                         )}
@@ -167,7 +152,6 @@ export default function HomeDetailPage() {
                   </div>
                 )}
 
-                {/* Main image */}
                 <div className="relative flex-1 rounded-3xl overflow-hidden bg-[#0B1E30] shadow-[0_30px_60px_-30px_rgba(0,15,27,0.35)] group">
                   <div className="relative aspect-[16/10]">
                     <AnimatePresence mode="wait">
@@ -183,12 +167,8 @@ export default function HomeDetailPage() {
                       />
                     </AnimatePresence>
 
-                    {/* Watermark ConstructONS logo */}
-                    <div className="absolute top-4 left-4 z-20 flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md pl-1.5 pr-3 py-1.5 shadow-md">
-                      <LogoMark className="w-6 h-6" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#000F1B]">
-                        ConstructONS
-                      </span>
+                    <div className="absolute top-4 left-4 z-20 rounded-full bg-white/90 backdrop-blur-md px-3 py-1.5 shadow-md flex items-center">
+                      <img src="/logo.webp" alt="ConstructONS Logo" className="h-5 w-auto object-contain" />
                     </div>
 
                     <div className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-full bg-[#FF5A00] text-white text-[10px] font-bold uppercase tracking-widest shadow-md">
@@ -240,8 +220,7 @@ export default function HomeDetailPage() {
 
                     {gallery.length > 1 && (
                       <div className="absolute bottom-4 left-4 z-20 px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-md text-white text-[10px] font-bold tracking-widest">
-                        {String(selected + 1).padStart(2, "0")} /{" "}
-                        {String(gallery.length).padStart(2, "0")}
+                        {String(selected + 1).padStart(2, "0")} / {String(gallery.length).padStart(2, "0")}
                       </div>
                     )}
                   </div>
@@ -280,27 +259,11 @@ export default function HomeDetailPage() {
 
                 <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <StatCell icon={Ruler} label="Area" value={home.area_sqft} />
-                  <StatCell
-                    icon={HomeIcon}
-                    label="Dimensions"
-                    value={home.dimensions || "—"}
-                  />
-                  <StatCell
-                    icon={Bed}
-                    label="Bedrooms"
-                    value={`${home.bedrooms} BHK`}
-                  />
+                  <StatCell icon={HomeIcon} label="Dimensions" value={home.dimensions || "—"} />
+                  <StatCell icon={Bed} label="Bedrooms" value={`${home.bedrooms} BHK`} />
                   <StatCell icon={Bath} label="Baths" value={home.bathrooms} />
-                  <StatCell
-                    icon={Layers}
-                    label="Floors"
-                    value={home.floors === 1 ? "G+1" : `G+${home.floors}`}
-                  />
-                  <StatCell
-                    icon={Car}
-                    label="Parking"
-                    value={`${home.parking} Car${home.parking > 1 ? "s" : ""}`}
-                  />
+                  <StatCell icon={Layers} label="Floors" value={home.floors === 1 ? "G+1" : `G+${home.floors}`} />
+                  <StatCell icon={Car} label="Parking" value={`${home.parking} Car${home.parking > 1 ? "s" : ""}`} />
                 </div>
 
                 {/* Price band */}
@@ -319,12 +282,11 @@ export default function HomeDetailPage() {
                   </div>
                 </div>
 
+                {/* Dynamic Call Button bound to backend settings */}
                 <div className="mt-4 space-y-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      open({ home: home.name, source: "home_detail" })
-                    }
+                    onClick={() => open({ home: home.name, source: "home_detail" })}
                     data-testid="home-detail-cta"
                     className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#FF5A00] hover:bg-[#E04F00] text-white text-sm font-semibold px-6 py-3.5 shadow-[0_12px_28px_rgba(255,90,0,0.32)] transition"
                   >
@@ -335,8 +297,7 @@ export default function HomeDetailPage() {
                       href={`tel:${settings.phone}`}
                       className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-black/10 bg-white/70 backdrop-blur text-[#000F1B] hover:border-[#000F1B] text-sm font-semibold px-6 py-3 transition"
                     >
-                      <Phone className="w-4 h-4 text-[#FF5A00]" /> Call{" "}
-                      {settings.phone}
+                      <Phone className="w-4 h-4 text-[#FF5A00]" /> Call {settings.phone}
                     </a>
                   )}
                 </div>
@@ -365,7 +326,6 @@ export default function HomeDetailPage() {
 
           {/* ═════════════ ABOUT + FLOOR PLAN ═════════════ */}
           <div className="mt-6 grid lg:grid-cols-[1.5fr_1fr] gap-5 lg:gap-6">
-            {/* About with modal trigger */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -392,12 +352,10 @@ export default function HomeDetailPage() {
                   </button>
                 </div>
 
-                {/* Teaser paragraph — clamped */}
                 <p className="mt-4 text-[#000F1B]/70 text-sm sm:text-[15px] leading-relaxed line-clamp-4">
                   {home.description}
                 </p>
 
-                {/* Quick highlight chips */}
                 {home.features?.length > 0 && (
                   <div className="mt-5 flex flex-wrap gap-2">
                     {home.features.slice(0, 4).map((f, i) => (
@@ -440,7 +398,6 @@ export default function HomeDetailPage() {
               </GlassCard>
             </motion.div>
 
-            {/* Visual Floor Plan */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -469,8 +426,7 @@ export default function HomeDetailPage() {
                   Ready to build {home.name}?
                 </div>
                 <h4 className="mt-2 text-2xl sm:text-3xl font-bold leading-tight">
-                  Get a personalized quote in{" "}
-                  <span className="text-[#FF5A00]">24 hours.</span>
+                  Get a personalized quote in <span className="text-[#FF5A00]">24 hours.</span>
                 </h4>
                 <p className="mt-2 text-white/55 text-sm leading-relaxed">
                   Talk to our expert. Free consultation. No obligation.
@@ -488,9 +444,7 @@ export default function HomeDetailPage() {
                 )}
                 <button
                   type="button"
-                  onClick={() =>
-                    open({ home: home.name, source: "home_detail_bottom" })
-                  }
+                  onClick={() => open({ home: home.name, source: "home_detail_bottom" })}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[#FF5A00] hover:bg-[#E04F00] text-white text-sm font-semibold px-6 py-3 shadow-[0_10px_28px_rgba(255,90,0,0.35)] transition"
                 >
                   Get Free Consultation <ArrowRight className="w-4 h-4" />
@@ -559,38 +513,25 @@ export default function HomeDetailPage() {
               onClick={(e) => e.stopPropagation()}
             />
 
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-white/10 border border-white/15 backdrop-blur px-3 py-1.5">
-              <LogoMark className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white">
-                ConstructONS · {home.name}
-              </span>
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-white/90 backdrop-blur px-3 py-1.5 shadow-md flex items-center">
+              <img src="/logo.webp" alt="ConstructONS Logo" className="h-5 w-auto object-contain" />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* About Modal */}
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} home={home} />
     </div>
   );
 }
 
-/* ────────────────────────────────────────────────────────────────
-   GLASS CARD
-──────────────────────────────────────────────────────────────── */
 function GlassCard({ children, padded = true, className = "" }) {
   return (
     <div
-      className={`
-        relative overflow-hidden rounded-3xl
-        bg-white/60 backdrop-blur-xl
-        border border-white/60
-        shadow-[0_20px_50px_-30px_rgba(0,15,27,0.2),inset_0_1px_0_rgba(255,255,255,0.9)]
-        ${padded ? "p-5 sm:p-6 md:p-7" : ""}
-        ${className}
-      `}
+      className={`relative overflow-hidden rounded-3xl bg-white/60 backdrop-blur-xl border border-white/60 shadow-[0_20px_50px_-30px_rgba(0,15,27,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] ${
+        padded ? "p-5 sm:p-6 md:p-7" : ""
+      } ${className}`}
     >
-      {/* Subtle top gloss */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/50 to-transparent" />
       <div className="relative">{children}</div>
     </div>
@@ -611,9 +552,6 @@ function StatCell({ icon: Icon, label, value }) {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────
-   ABOUT MODAL — dynamic full story
-──────────────────────────────────────────────────────────────── */
 function AboutModal({ open, onClose, home }) {
   if (!home) return null;
 
@@ -632,21 +570,11 @@ function AboutModal({ open, onClose, home }) {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 40, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="
-              relative w-full sm:max-w-2xl max-h-[92vh]
-              bg-white rounded-t-3xl sm:rounded-3xl
-              shadow-2xl overflow-hidden flex flex-col
-              font-['Poppins',sans-serif]
-            "
+            className="relative w-full sm:max-w-2xl max-h-[92vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col font-['Poppins',sans-serif]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header image */}
             <div className="relative h-48 sm:h-56 shrink-0 overflow-hidden">
-              <img
-                src={home.cover_image}
-                alt={home.name}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+              <img src={home.cover_image} alt={home.name} className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#000F1B]/85 via-[#000F1B]/30 to-transparent" />
 
               <button
@@ -658,18 +586,21 @@ function AboutModal({ open, onClose, home }) {
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="absolute inset-x-0 bottom-0 p-5">
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF8A4C]">
-                  <LogoMark className="w-4 h-4" />
-                  {home.style} · Full Story
+              <div className="absolute inset-x-0 bottom-0 p-5 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF8A4C]">
+                    <span>· Full Story</span>
+                  </div>
+                  <h3 className="mt-1 text-white font-bold text-2xl sm:text-3xl tracking-tight leading-tight">
+                    {home.name}
+                  </h3>
                 </div>
-                <h3 className="mt-1 text-white font-bold text-2xl sm:text-3xl tracking-tight leading-tight">
-                  {home.name}
-                </h3>
+                <div className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-md flex items-center shrink-0">
+                  <img src="/logo.webp" alt="ConstructONS Logo" className="h-5 w-auto object-contain" />
+                </div>
               </div>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-7">
               {home.tagline && (
                 <div className="text-sm sm:text-base font-semibold text-[#FF5A00] italic mb-4">
@@ -691,10 +622,7 @@ function AboutModal({ open, onClose, home }) {
                   </div>
                   <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5">
                     {home.features.map((f, i) => (
-                      <div
-                        key={`modal-feat-${i}`}
-                        className="flex items-start gap-2.5 text-sm text-[#000F1B]/85"
-                      >
+                      <div key={`modal-feat-${i}`} className="flex items-start gap-2.5 text-sm text-[#000F1B]/85">
                         <span className="w-5 h-5 rounded-full bg-[#FF5A00]/10 grid place-items-center shrink-0 mt-0.5">
                           <Check className="w-3 h-3 text-[#FF5A00]" />
                         </span>
@@ -705,18 +633,13 @@ function AboutModal({ open, onClose, home }) {
                 </div>
               )}
 
-              {/* Quick facts */}
               <div className="mt-8 pt-6 border-t border-black/5 grid grid-cols-3 gap-3">
                 <ModalFact label="Area" value={home.area_sqft} />
                 <ModalFact label="BHK" value={home.bedrooms} />
-                <ModalFact
-                  label="Floors"
-                  value={home.floors === 1 ? "G+1" : `G+${home.floors}`}
-                />
+                <ModalFact label="Floors" value={home.floors === 1 ? "G+1" : `G+${home.floors}`} />
               </div>
             </div>
 
-            {/* Footer */}
             <div className="shrink-0 border-t border-black/5 p-4 bg-[#F7F7F7] flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
@@ -751,13 +674,9 @@ function ModalFact({ label, value }) {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────
-   FLOOR PLAN CARD — visual proportional blocks
-──────────────────────────────────────────────────────────────── */
 function FloorPlanCard({ home }) {
   const areas = home.floor_areas || [];
 
-  // Compute proportional sizes
   const parseSqft = (str) => {
     if (!str) return 0;
     const m = String(str).match(/[\d,]+/);
@@ -767,7 +686,7 @@ function FloorPlanCard({ home }) {
   const withValues = areas.map((a) => ({ ...a, sqft: parseSqft(a.area) }));
   const total = withValues.reduce((s, a) => s + a.sqft, 0);
 
-  const [tab, setTab] = useState("visual"); // 'visual' | 'list'
+  const [tab, setTab] = useState("visual");
 
   return (
     <GlassCard padded>
@@ -784,7 +703,6 @@ function FloorPlanCard({ home }) {
           </p>
         </div>
 
-        {/* Tab switch */}
         <div className="flex rounded-full bg-white/60 backdrop-blur border border-black/5 p-0.5 shrink-0">
           <TabBtn active={tab === "visual"} onClick={() => setTab("visual")}>
             Visual
@@ -795,14 +713,11 @@ function FloorPlanCard({ home }) {
         </div>
       </div>
 
-      {/* Visual tab */}
       {tab === "visual" && withValues.length > 0 && (
         <div className="mt-5">
-          {/* Proportional grid */}
           <div className="grid grid-cols-6 auto-rows-[60px] gap-2">
             {withValues.map((a, i) => {
               const share = total > 0 ? a.sqft / total : 1 / withValues.length;
-              // Convert share → grid span (col: 2-6, row: 1-3)
               let colSpan = Math.max(2, Math.min(6, Math.round(share * 12)));
               let rowSpan = share > 0.25 ? 2 : 1;
 
@@ -846,7 +761,6 @@ function FloorPlanCard({ home }) {
             })}
           </div>
 
-          {/* Total */}
           {total > 0 && (
             <div className="mt-4 flex items-center justify-between rounded-xl bg-[#000F1B] text-white p-3 border border-white/10">
               <div className="text-[10px] uppercase tracking-widest text-[#FF8A4C] font-bold">
@@ -860,16 +774,12 @@ function FloorPlanCard({ home }) {
         </div>
       )}
 
-      {/* List tab */}
       {tab === "list" && (
         <ul className="mt-5 space-y-0.5">
           {withValues.map((a, i) => {
             const share = total > 0 ? (a.sqft / total) * 100 : 0;
             return (
-              <li
-                key={`li-fp-${i}`}
-                className="py-3 border-b border-black/5 last:border-0"
-              >
+              <li key={`li-fp-${i}`} className="py-3 border-b border-black/5 last:border-0">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A00]" />
@@ -896,19 +806,11 @@ function FloorPlanCard({ home }) {
         </ul>
       )}
 
-      {/* Floor plan image (if available) */}
       {home.floorplan_image && (
         <div className="mt-5 rounded-2xl overflow-hidden bg-[#F7F7F7] border border-black/5 relative">
-          <img
-            src={home.floorplan_image}
-            alt="Floor plan blueprint"
-            className="w-full h-auto object-cover"
-          />
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur rounded-full px-2.5 py-1 shadow-sm">
-            <LogoMark className="w-4 h-4" />
-            <span className="text-[9px] font-bold uppercase tracking-widest text-[#000F1B]">
-              Blueprint
-            </span>
+          <img src={home.floorplan_image} alt="Floor plan blueprint" className="w-full h-auto object-cover" />
+          <div className="absolute top-3 left-3 bg-white/95 backdrop-blur rounded-full px-3 py-1.5 shadow-sm flex items-center">
+            <img src="/logo.webp" alt="ConstructONS Logo" className="h-5 w-auto object-contain" />
           </div>
         </div>
       )}

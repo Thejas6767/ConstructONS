@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Facebook, Instagram, Twitter, Linkedin, Youtube } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Youtube, MessageSquare } from "lucide-react";
 import BrandLockup from "@/components/site/BrandLockup";
 
 const COLUMNS = [
@@ -17,10 +17,10 @@ const COLUMNS = [
   {
     title: "Packages",
     links: [
-      { label: "Basic Package", to: "/#packages" },
-      { label: "Essential Package", to: "/#packages" },
-      { label: "Standard Package", to: "/#packages" },
-      { label: "Premium Package", to: "/#packages" },
+      { label: "Basic Package", to: "/packages/basic" },
+      { label: "Essential Package", to: "/packages/essential" },
+      { label: "Standard Package", to: "/packages/standard" },
+      { label: "Premium Package", to: "/packages/premium" },
     ],
   },
   {
@@ -67,6 +67,17 @@ const COLUMNS = [
 
 export default function Footer({ settings }) {
   const s = settings || {};
+
+  // Social media links: Facebook, Instagram, LinkedIn, and YouTube are disconnected (empty string) 
+  // so they don't clash with backend, but Reddit is kept hardcoded as requested.
+  const socialLinks = {
+    facebook: "",
+    instagram: "",
+    linkedin: "",
+    youtube: "",
+    reddit: "https://www.reddit.com/r/ConstructONS/",
+  };
+
   return (
     <footer className="bg-brand-navy text-white" data-testid="site-footer">
       <div className="container-wide py-16">
@@ -76,12 +87,12 @@ export default function Footer({ settings }) {
             <p className="mt-4 text-white/60 text-sm max-w-xs">
               India&rsquo;s most intelligent construction platform for premium home owners.
             </p>
-            <div className="mt-6 flex items-center gap-2">
-              <SocialLink href={s.social_links?.facebook} icon={Facebook} />
-              <SocialLink href={s.social_links?.instagram} icon={Instagram} />
-              <SocialLink href={s.social_links?.twitter} icon={Twitter} />
-              <SocialLink href={s.social_links?.linkedin} icon={Linkedin} />
-              <SocialLink href={s.social_links?.youtube} icon={Youtube} />
+            <div className="mt-6 flex items-center gap-2 flex-wrap">
+              <SocialLink href={socialLinks.facebook} icon={Facebook} title="Facebook" />
+              <SocialLink href={socialLinks.instagram} icon={Instagram} title="Instagram" />
+              <SocialLink href={socialLinks.linkedin} icon={Linkedin} title="LinkedIn" />
+              <SocialLink href={socialLinks.youtube} icon={Youtube} title="YouTube" />
+              <SocialLink href={socialLinks.reddit} icon={MessageSquare} title="Reddit" />
             </div>
           </div>
 
@@ -120,10 +131,22 @@ export default function Footer({ settings }) {
   );
 }
 
-function SocialLink({ href, icon: Icon }) {
-  if (!href) return null;
+function SocialLink({ href, icon: Icon, title }) {
+  // Always render the button icon even if href is empty/disconnected, 
+  // but prevent clicking dead links if href is missing.
   return (
-    <a href={href} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full grid place-items-center bg-white/5 hover:bg-brand-orange transition">
+    <a
+      href={href || "#"}
+      target={href ? "_blank" : undefined}
+      rel={href ? "noreferrer" : undefined}
+      title={title}
+      onClick={(e) => {
+        if (!href) e.preventDefault();
+      }}
+      className={`w-9 h-9 rounded-full grid place-items-center bg-white/5 transition ${
+        href ? "hover:bg-brand-orange cursor-pointer" : "opacity-60 cursor-default"
+      }`}
+    >
       <Icon className="w-4 h-4" />
     </a>
   );

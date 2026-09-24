@@ -9,35 +9,43 @@ import {
   ArrowRight,
   Download,
   Check,
-  X,
   ChevronDown,
   ShieldCheck,
   Layers,
-  Sparkles,
 } from "lucide-react";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
-import LogoMark from "@/components/site/LogoMark";
 import { publicApi } from "@/lib/api";
 import { useBrochureModal } from "@/components/site/BrochureModalProvider";
 import { useLeadModal } from "@/components/site/LeadModalProvider";
 
 /* ──────────────────────────────────────────────────────────────
-   Brand pill — Construct white · ONS orange · black pill
+   Brand pill — Uses /logo.webp directly with ConstructONS branding
 ────────────────────────────────────────────────────────────── */
 function BrandPill({ size = "md", label = "Compare" }) {
   const sizes = {
-    sm: { pill: "px-3 py-1.5 text-[11px] gap-1.5", mark: "w-4 h-4" },
-    md: { pill: "px-4 py-2 text-xs gap-2", mark: "w-5 h-5" },
+    sm: { pill: "px-3 py-1.5 text-[11px] gap-1.5", img: "w-4 h-4" },
+    md: { pill: "px-4 py-2 text-xs gap-2", img: "w-5 h-5" },
   }[size];
 
   return (
     <div
       className={`inline-flex items-center rounded-full bg-[#000F1B] shadow-[0_10px_30px_rgba(0,15,27,0.25)] border border-white/5 ${sizes.pill}`}
     >
-      <LogoMark className={sizes.mark} />
-      <span className="font-bold tracking-tight text-white">
-        Construct<span className="text-[#FF5A00]">ONS</span>
+      <img
+        src="/logo.webp"
+        alt="ConstructONS Logo"
+        className={`${sizes.img} object-contain`}
+      />
+      <span className="font-bold tracking-tight text-white flex items-center">
+        Construct
+        <span className="text-[#E04F00] inline-flex items-center justify-center align-middle mx-[1px]" style={{ transform: "translateY(-1px)" }}>
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+            <path d="M12 2v9" />
+            <path d="M5.64 5.64a9 9 0 1 0 12.72 0" />
+          </svg>
+        </span>
+        NS
       </span>
       {label && (
         <>
@@ -75,8 +83,8 @@ export default function PackagesComparePage() {
   }, [data]);
 
   // Extract variables with fallbacks before calling useMemo
-const packages = useMemo(() => data?.packages || [], [data]);
-const category_order = useMemo(() => data?.category_order || [], [data]);
+  const packages = useMemo(() => data?.packages || [], [data]);
+  const category_order = useMemo(() => data?.category_order || [], [data]);
 
   // Union of item labels per category (called unconditionally before early return)
   const categoryItems = useMemo(() => {

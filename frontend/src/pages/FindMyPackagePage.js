@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
-import LogoMark from "@/components/site/LogoMark";
 import { publicApi } from "@/lib/api";
 import { useLeadModal } from "@/components/site/LeadModalProvider";
 
@@ -206,6 +205,43 @@ function recommendPackage(answers) {
 }
 
 /* ──────────────────────────────────────────────────────────────
+   CUSTOM LOGO COMPONENT WITH POWER BUTTON 'O' (Darker styling)
+────────────────────────────────────────────────────────────── */
+function LogoMark({ className = "w-6 h-6" }) {
+  return (
+    <div className={`relative inline-flex items-center justify-center shrink-0 ${className}`}>
+      <img
+        src="/logo.webp"
+        alt="ConstructONS Logo"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+        className="w-full h-full object-contain"
+      />
+    </div>
+  );
+}
+
+function BrandLogoText({ size = "md" }) {
+  const sizes = {
+    sm: "text-xs",
+    md: "text-base",
+    lg: "text-xl",
+  }[size];
+
+  return (
+    <span className={`font-bold tracking-tight text-white inline-flex items-center ${sizes}`}>
+      Construct
+      {/* The 'O' rendered as a darker, bolder power button */}
+      <span className="inline-flex items-center justify-center relative mx-[1px] w-[0.8em] h-[0.8em] rounded-full border-[2.5px] border-[#D44A00] align-middle bg-[#FF5A00]/10">
+        <span className="absolute top-0 w-[2.5px] h-[48%] bg-[#D44A00] rounded-full -translate-y-0.5" />
+      </span>
+      NS
+    </span>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
    PAGE
 ────────────────────────────────────────────────────────────── */
 export default function FindMyPackagePage() {
@@ -299,31 +335,33 @@ export default function FindMyPackagePage() {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   BRAND PILL
+   BRAND PILL (Supports logo-only mode)
 ────────────────────────────────────────────────────────────── */
-function BrandPill({ size = "md" }) {
+function BrandPill({ size = "md", logoOnly = false }) {
   const sizes = {
-    sm: { pill: "px-3 py-1.5 text-[11px] gap-1.5", mark: "w-4 h-4" },
-    md: { pill: "px-4 py-2 text-xs gap-2", mark: "w-5 h-5" },
-    lg: { pill: "px-5 py-2.5 text-sm gap-2.5", mark: "w-6 h-6" },
+    sm: { pill: "px-3 py-1.5 text-[11px] gap-1.5", mark: "w-5 h-5" },
+    md: { pill: "px-4 py-2 text-xs gap-2", mark: "w-6 h-6" },
+    lg: { pill: "px-5 py-2.5 text-sm gap-2.5", mark: "w-7 h-7" },
   }[size];
+
+  if (logoOnly) {
+    return (
+      <div className={`inline-flex items-center justify-center rounded-full bg-[#000F1B] shadow-[0_10px_30px_rgba(0,15,27,0.25)] border border-white/10 ${size === 'sm' ? 'p-2' : size === 'lg' ? 'p-3.5' : 'p-2.5'}`}>
+        <LogoMark className={sizes.mark} />
+      </div>
+    );
+  }
 
   return (
     <div className={`inline-flex items-center rounded-full bg-[#000F1B] shadow-[0_10px_30px_rgba(0,15,27,0.25)] border border-white/5 ${sizes.pill}`}>
       <LogoMark className={sizes.mark} />
-      <span className="font-bold tracking-tight text-white">
-        Construct<span className="text-[#FF5A00]">ONS</span>
-      </span>
-      <span className="hidden sm:inline text-white/40 mx-1">·</span>
-      <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
-        Discovery
-      </span>
+      <BrandLogoText size={size === "sm" ? "sm" : size === "lg" ? "lg" : "md"} />
     </div>
   );
 }
 
 /* ──────────────────────────────────────────────────────────────
-   INTRO — smaller title, no image
+   INTRO — Heading modified to remove Discovery references
 ────────────────────────────────────────────────────────────── */
 function IntroScreen({ onBegin }) {
   return (
@@ -339,10 +377,6 @@ function IntroScreen({ onBegin }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5A00] mb-5">
-            Find Your Home
-          </div>
-
           <h1 className="text-[#000F1B] font-bold text-3xl sm:text-4xl md:text-5xl lg:text-[56px] leading-[1.05] tracking-tight">
             Answer four questions.
             <br />
@@ -357,8 +391,8 @@ function IntroScreen({ onBegin }) {
           />
 
           <p className="mt-6 max-w-lg mx-auto text-[#000F1B]/60 text-sm md:text-base leading-relaxed">
-            A short guided discovery — your investment, lifestyle, style and
-            technology preferences. We'll match you to the right package.
+            A short guided preference selection — your investment, lifestyle, style and
+            technology priorities. We'll match you to the right package.
           </p>
 
           <motion.div
@@ -372,7 +406,7 @@ function IntroScreen({ onBegin }) {
               onClick={onBegin}
               className="group inline-flex items-center gap-3 rounded-full bg-[#000F1B] hover:bg-[#FF5A00] text-white text-sm font-semibold px-8 py-4 transition-all shadow-[0_16px_40px_rgba(0,15,27,0.25)]"
             >
-              Begin Discovery
+              Begin Selection
               <span className="w-7 h-7 rounded-full bg-[#FF5A00] group-hover:bg-white group-hover:text-[#FF5A00] text-white grid place-items-center transition">
                 <ArrowRight className="w-3.5 h-3.5" />
               </span>
@@ -409,7 +443,7 @@ function IntroScreen({ onBegin }) {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   QUIZ — 5 cards per row on large screens
+   QUIZ
 ────────────────────────────────────────────────────────────── */
 function QuizScreen({ step, total, current, answers, onPick, onBack }) {
   const [showTip, setShowTip] = useState(false);
@@ -484,7 +518,7 @@ function QuizScreen({ step, total, current, answers, onPick, onBack }) {
                   {current.subtitle}
                 </p>
 
-                {/* Options — 5 per row on desktop */}
+                {/* Options */}
                 <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {current.options.map((opt, i) => {
                     const active = answers[current.id] === opt.id;
@@ -569,7 +603,7 @@ function QuizScreen({ step, total, current, answers, onPick, onBack }) {
                     className="inline-flex items-center gap-2 text-sm font-semibold text-[#000F1B]/60 hover:text-[#FF5A00] transition"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    {step === 0 ? "Back to intro" : "Previous"}
+                    {step === 0 ? "Back to start" : "Previous"}
                   </button>
 
                   <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#000F1B]/40">
@@ -627,7 +661,7 @@ function ProfilePanel({ answers }) {
       <div className="rounded-sm bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#FF5A00]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A00] animate-pulse" />
-          Your Profile
+          Your Selections
         </div>
 
         <div className="mt-4 space-y-3">
@@ -675,7 +709,7 @@ function AnalysingScreen() {
     >
       <div className="container-wide text-center max-w-md">
         <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF5A00] mb-4">
-          Analysing
+          Processing
         </div>
         <h3 className="text-[#000F1B] font-bold text-2xl sm:text-3xl md:text-4xl leading-tight tracking-tight">
           Finding spaces that fit you.
@@ -716,9 +750,7 @@ function AnalysingScreen() {
   );
 }
 
-
 function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure }) {
- 
   const shortlisted = useMemo(() => {
     if (!homes?.length) return [];
     let list = [...homes];
@@ -748,16 +780,13 @@ function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure
       <div className="container-wide">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto">
-          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF5A00] mb-4">
-            Your Match
-          </div>
           <h2 className="text-[#000F1B] font-bold text-3xl sm:text-4xl md:text-5xl leading-[1.05] tracking-tight">
             A home designed{" "}
             <span className="italic text-[#FF5A00]">around you.</span>
           </h2>
         </div>
 
-        {/* PACKAGE CARD (image-free) + WHY */}
+        {/* PACKAGE CARD (Logo-only badge) + WHY */}
         <div className="mt-10 grid lg:grid-cols-[1.15fr_1fr] gap-5 items-stretch">
           {/* Left: package summary card */}
           <motion.div
@@ -773,7 +802,8 @@ function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure
             <div className="relative z-10">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <BrandPill size="sm" />
+                  {/* BrandPill with logoOnly enabled to display ONLY the logo mark */}
+                  <BrandPill size="sm" logoOnly={true} />
                   <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF8A4C]">
                     Recommended Package
                   </div>
@@ -782,8 +812,6 @@ function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure
                   </h3>
                   <div className="mt-1 text-white/60 text-sm">{result.tagline}</div>
                 </div>
-
-                
               </div>
 
               <div className="mt-6 flex items-end gap-2">
@@ -928,7 +956,7 @@ function ResultScreen({ result, answers, homes, onRestart, onConsult, onBrochure
             className="inline-flex items-center gap-2 text-sm font-semibold text-[#000F1B]/60 hover:text-[#FF5A00] transition"
           >
             <RotateCcw className="w-4 h-4" />
-            Retake Discovery
+            Retake Selection
           </button>
 
           <div className="flex flex-col sm:flex-row items-center gap-3">

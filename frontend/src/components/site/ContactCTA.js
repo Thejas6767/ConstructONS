@@ -9,6 +9,8 @@ import {
   MapPin,
   Clock,
   ShieldCheck,
+  ExternalLink,
+  Power,
 } from "lucide-react";
 import { FadeIn, SectionLabel } from "@/components/site/Primitives";
 import { useLeadModal } from "@/components/site/LeadModalProvider";
@@ -16,19 +18,21 @@ import { useLeadModal } from "@/components/site/LeadModalProvider";
 export default function ContactCTA({ settings = {} }) {
   const { open } = useLeadModal();
 
-  const phone = settings.phone || "+91 98765 43210";
-  const whatsapp = settings.whatsapp || phone;
-  const email = settings.email || "hello@constructons.in";
-  const address =
-    settings.address ||
-    "12th Floor, Prestige Tower, MG Road, Bangalore 560001, India";
+  // Dynamic values from backend settings
+  const phone = settings?.phone || settings?.contact_phone || "";
+  const whatsapp = settings?.whatsapp || settings?.phone || "";
+  const email = settings?.email || settings?.support_email || "";
+  
+  const googleMapsUrl = settings?.map_direction_url || settings?.google_maps_url || "";
+  const googleMapsEmbed = settings?.map_embed_url || settings?.google_maps_embed || "";
+
   const waNumber = String(whatsapp).replace(/\D/g, "");
-  const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(
-    "Hi ConstructONS, I'd like a free consultation for my home construction."
-  )}`;
-  const waQr = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(
-    waLink
-  )}`;
+  const waLink = waNumber
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent("Hi ConstructONS, I'd like a free consultation for my home construction.")}`
+    : "#";
+  const waQr = waNumber
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(waLink)}`
+    : "";
 
   return (
     <section
@@ -63,22 +67,22 @@ export default function ContactCTA({ settings = {} }) {
                 <ContactItem
                   icon={Phone}
                   label="Call Us"
-                  value={phone}
-                  href={`tel:${phone}`}
+                  value={phone || "Loading..."}
+                  href={phone ? `tel:${phone.replace(/\s+/g, "")}` : "#"}
                   testId="contact-call"
                 />
                 <ContactItem
                   icon={MessageCircle}
                   label="WhatsApp"
-                  value={whatsapp}
+                  value={whatsapp || "Loading..."}
                   href={waLink}
                   testId="contact-whatsapp"
                 />
                 <ContactItem
                   icon={Mail}
                   label="Email Us"
-                  value={email}
-                  href={`mailto:${email}`}
+                  value={email || "Loading..."}
+                  href={email ? `mailto:${email}` : "#"}
                   testId="contact-email"
                 />
               </div>
@@ -89,42 +93,47 @@ export default function ContactCTA({ settings = {} }) {
             {/* Middle: map + Phone QR mockup */}
             <div className="grid lg:grid-cols-[1fr_auto] gap-0">
               {/* MAP */}
-              <div className="relative min-h-[260px] sm:min-h-[300px] lg:min-h-[360px] bg-[#E8EEF2] border-t lg:border-t-0 lg:border-r border-black/5">
-                {settings.google_maps_embed ? (
+              <div className="relative min-h-[280px] sm:min-h-[320px] lg:min-h-[380px] bg-[#E8EEF2] border-t lg:border-t-0 lg:border-r border-black/5">
+                {googleMapsEmbed ? (
                   <iframe
-                    title="ConstructONS Office"
-                    src={settings.google_maps_embed}
+                    title="Office Location Map"
+                    src={googleMapsEmbed}
                     className="absolute inset-0 w-full h-full border-0"
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                     allowFullScreen
                   />
                 ) : (
-                  <div className="absolute inset-0 grid place-items-center p-6 text-center">
-                    <div>
-                      <MapPin className="w-8 h-8 text-[#FF5A00] mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-[#000F1B]">
-                        {address}
-                      </p>
-                      <p className="text-xs text-[#000F1B]/45 mt-1">
-                        Map embed not set
-                      </p>
-                    </div>
-                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">Map loading...</div>
                 )}
 
-                {/* Address chip on map */}
-                <div className="absolute left-3 right-3 sm:left-4 sm:right-auto sm:max-w-xs bottom-3 rounded-xl bg-white/95 backdrop-blur-md border border-black/5 p-2.5 sm:p-3 shadow-lg flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-[#FF5A00] mt-0.5 shrink-0" />
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#FF5A00]">
-                      Head Office
-                    </div>
-                    <div className="text-xs font-medium text-[#000F1B] leading-snug mt-0.5">
-                      {address}
+                {/* Location Overlay Card */}
+                <a
+                  href={googleMapsUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute left-3 sm:left-4 top-3 rounded-xl bg-white/95 backdrop-blur-md border border-black/10 p-3 shadow-lg flex items-center justify-between gap-4 hover:bg-slate-50 transition group"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <MapPin className="w-5 h-5 text-[#FF5A00] mt-0.5 shrink-0" />
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#FF5A00]">
+                        View Location
+                      </div>
+                      
+                      {/* Styled Company Title with Larger/Darker Power Button "O" */}
+                      <div className="text-base font-bold text-[#000F1B] leading-snug mt-0.5 flex items-center tracking-tight">
+                        <span>Construct</span>
+                        <span className="text-[#FF5A00] flex items-center ml-[1px]">
+                          {/* Larger, Darker Orange Power Button "O" */}
+                          <Power className="w-4 h-4 stroke-[3.5] text-[#E04F00] inline-block transform translate-y-[-0.5px] -mr-[0.5px]" />
+                          NS
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                  <ExternalLink className="w-4 h-4 text-[#000F1B]/40 shrink-0 group-hover:text-[#000F1B] transition-colors" />
+                </a>
               </div>
 
               {/* QR inside Mobile Mockup */}
@@ -151,11 +160,15 @@ export default function ContactCTA({ settings = {} }) {
 
                     {/* QR Code Container */}
                     <div className="w-[125px] h-[125px] bg-white rounded-xl p-1.5 shadow-md flex items-center justify-center">
-                      <img
-                        src={waQr}
-                        alt="Scan to chat on WhatsApp"
-                        className="w-full h-full object-contain rounded-lg"
-                      />
+                      {waQr ? (
+                        <img
+                          src={waQr}
+                          alt="Scan to chat on WhatsApp"
+                          className="w-full h-full object-contain rounded-lg"
+                        />
+                      ) : (
+                        <div className="text-[10px] text-slate-400">Loading...</div>
+                      )}
                     </div>
 
                     {/* Home Indicator */}
@@ -202,7 +215,7 @@ export default function ContactCTA({ settings = {} }) {
 
             <div className="flex flex-col sm:flex-row gap-2.5 w-full lg:w-auto">
               <a
-                href={`tel:${phone}`}
+                href={phone ? `tel:${phone.replace(/\s+/g, "")}` : "#"}
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-white text-sm font-semibold px-5 py-3 transition"
               >
                 <Phone className="w-4 h-4" />
@@ -224,7 +237,7 @@ export default function ContactCTA({ settings = {} }) {
         {/* Quick Links Row */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <a
-            href={`tel:${phone}`}
+            href={phone ? `tel:${phone.replace(/\s+/g, "")}` : "#"}
             className="rounded-2xl border border-black/5 bg-[#F7F7F7] hover:border-[#FF5A00]/30 hover:bg-white p-4 flex items-center gap-3 transition"
           >
             <span className="w-10 h-10 rounded-full bg-[#FF5A00]/10 text-[#FF5A00] grid place-items-center">
@@ -234,7 +247,7 @@ export default function ContactCTA({ settings = {} }) {
               <div className="text-[10px] uppercase tracking-wider text-[#000F1B]/40 font-bold">
                 Call
               </div>
-              <div className="text-sm font-semibold text-[#000F1B]">{phone}</div>
+              <div className="text-sm font-semibold text-[#000F1B]">{phone || "Loading..."}</div>
             </div>
           </a>
           <a
@@ -256,7 +269,7 @@ export default function ContactCTA({ settings = {} }) {
             </div>
           </a>
           <a
-            href={`mailto:${email}`}
+            href={email ? `mailto:${email}` : "#"}
             className="rounded-2xl border border-black/5 bg-[#F7F7F7] hover:border-[#FF5A00]/30 hover:bg-white p-4 flex items-center gap-3 transition"
           >
             <span className="w-10 h-10 rounded-full bg-[#FF5A00]/10 text-[#FF5A00] grid place-items-center">
@@ -267,7 +280,7 @@ export default function ContactCTA({ settings = {} }) {
                 Email
               </div>
               <div className="text-sm font-semibold text-[#000F1B] truncate">
-                {email}
+                {email || "Loading..."}
               </div>
             </div>
           </a>

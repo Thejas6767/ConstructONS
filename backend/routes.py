@@ -335,6 +335,14 @@ class RecommendRequest(BaseModel):
     family_size: str
     style: Optional[str] = None
     smart_home: str = "no"
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_city: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    city: Optional[str] = None
 
 
 @router.post("/recommend")
@@ -392,6 +400,11 @@ async def recommend_package(body: RecommendRequest):
         shortlist = [h for h in homes if (h.get("bedrooms") or 0) >= needed_bhk]
     shortlist = shortlist[:3]
 
+    c_name = body.contact_name or body.name
+    c_phone = body.contact_phone or body.phone
+    c_email = body.contact_email or body.email
+    c_city = body.contact_city or body.city
+
     submission = QuizSubmission(
         budget=body.budget,
         family_size=body.family_size,
@@ -402,9 +415,33 @@ async def recommend_package(body: RecommendRequest):
         shortlisted_home_slugs=[h.get("slug") for h in shortlist if h.get("slug")],
         shortlisted_home_names=[h.get("name") for h in shortlist if h.get("name")],
         score=scored[0][0],
+        contact_name=c_name,
+        contact_phone=c_phone,
+        contact_email=c_email,
+        contact_city=c_city,
+        status="contact_captured" if (c_phone or c_email) else "new",
         source="quiz",
     )
     await db.quiz_submissions.insert_one(submission.model_dump())
+
+    # Automatically log lead if contact info was provided
+    if c_phone or c_email or c_name:
+        lead = Lead(
+            name=c_name or "Quiz User",
+            phone=c_phone or "",
+            email=c_email,
+            city=c_city,
+            interested_package=best.get("name"),
+            message=f"Quiz submitted: Budget={body.budget}, Family={body.family_size}, Style={body.style or 'Any'}",
+            source="quiz",
+            quiz_submission_id=submission.id
+        )
+        lead_doc = lead.model_dump()
+        await db.leads.insert_one(lead_doc)
+        await db.quiz_submissions.update_one(
+            {"id": submission.id},
+            {"$set": {"converted_to_lead_id": lead.id, "status": "converted"}}
+        )
 
     return {
         "recommended_package": best,
@@ -423,6 +460,60 @@ class QuizSubmissionUpdate(BaseModel):
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
     contact_city: Optional[str] = None
+
+class QuizContactCaptureRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    city: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_city: Optional[str] = None
+
+
+@router.post("/quiz-submissions/{id}/contact")
+async def capture_quiz_contact(id: str, body: QuizContactCaptureRequest):
+    """Public endpoint to attach contact info to an existing quiz submission."""
+    sub = await db.quiz_submissions.find_one({"id": id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(status_code=404, detail="Quiz submission not found")
+    
+    c_name = body.contact_name or body.name or sub.get("contact_name")
+    c_phone = body.contact_phone or body.phone or sub.get("contact_phone")
+    c_email = body.contact_email or body.email or sub.get("contact_email")
+    c_city = body.contact_city or body.city or sub.get("contact_city")
+
+    update_dict = {
+        "contact_name": c_name,
+        "contact_phone": c_phone,
+        "contact_email": c_email,
+        "contact_city": c_city,
+        "status": "contact_captured",
+        "updated_at": now_iso()
+    }
+
+    # Automatically create a Lead in Admin CRM
+    lead_id = sub.get("converted_to_lead_id")
+    if not lead_id and (c_phone or c_email or c_name):
+        lead = Lead(
+            name=c_name or "Quiz User",
+            phone=c_phone or "",
+            email=c_email,
+            city=c_city,
+            interested_package=sub.get("recommended_package_name"),
+            message=f"Quiz completed & contact captured. Budget={sub.get('budget')}, Family={sub.get('family_size')}",
+            source="quiz",
+            quiz_submission_id=id
+        )
+        lead_doc = lead.model_dump()
+        await db.leads.insert_one(lead_doc)
+        lead_id = lead.id
+        update_dict["converted_to_lead_id"] = lead_id
+        update_dict["status"] = "converted"
+
+    await db.quiz_submissions.update_one({"id": id}, {"$set": update_dict})
+    return {"success": True, "quiz_submission_id": id, "lead_id": lead_id}
 
 
 @router.get("/quiz-submissions", dependencies=[Depends(require_admin)])
@@ -504,13 +595,13 @@ async def notifications_pending(since: Optional[str] = None):
         })
 
     for q in quizzes:
-        contact = q.get("contact_name") or "Anonymous"
+        contact = q.get("contact_name") or q.get("contact_phone") or "Anonymous"
         pkg = q.get("recommended_package_name") or "—"
         items.append({
             "type": "quiz",
             "id": q.get("id"),
             "title": f"Quiz submission — {contact}",
-            "subtitle": f"Recommended: {pkg}",
+            "subtitle": f"Recommended: {pkg} · Budget: {q.get('budget','—')}",
             "created_at": q.get("created_at"),
             "link": "/admin/quiz-submissions",
         })
@@ -1236,3 +1327,9 @@ async def _snapshot_package(package_id: str, note: str = "edit"):
         "data": current,
     }
     await db.package_versions.insert_one(snap)
+    cursor = db.package_versions.find(
+        {"package_id": package_id}, {"id": 1}
+    ).sort("snapshot_at", -1).skip(MAX_VERSIONS_PER_PACKAGE)
+    old_ids = [d["id"] async for d in cursor]
+    if old_ids:
+        await db.package_versions.delete_many({"id": {"$in": old_ids}})

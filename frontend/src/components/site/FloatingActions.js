@@ -36,6 +36,7 @@ export default function FloatingActions({ phone, whatsapp }) {
   if (!phone && !wa) return null;
 
   return (
+    // Anchored strictly to BOTTOM RIGHT
     <div className="fixed right-4 bottom-6 md:right-6 md:bottom-8 z-50 flex flex-col gap-3.5 items-end">
       {/* Phone Action */}
       {phone && (
@@ -58,7 +59,6 @@ export default function FloatingActions({ phone, whatsapp }) {
             whileTap={{ scale: 0.92 }}
             className="relative flex h-12 w-12 items-center justify-center rounded-full bg-brand-orange text-white shadow-lg shadow-brand-orange/30 transition-all duration-300 hover:shadow-brand-orange/50"
           >
-            {/* Subtle Pulse Effect */}
             <span className="absolute inset-0 rounded-full bg-brand-orange opacity-40 animate-ping pointer-events-none" />
             <PhoneIcon className="relative z-10 w-5 h-5" />
           </motion.a>
@@ -88,7 +88,6 @@ export default function FloatingActions({ phone, whatsapp }) {
             whileTap={{ scale: 0.92 }}
             className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg shadow-[#25D366]/30 transition-all duration-300 hover:shadow-[#25D366]/50"
           >
-            {/* Ambient Glow Ring */}
             <span className="absolute -inset-1 rounded-full bg-[#25D366]/20 blur-sm pointer-events-none group-hover:bg-[#25D366]/40 transition-colors" />
             <WhatsAppIcon className="relative z-10 w-6 h-6" />
           </motion.a>

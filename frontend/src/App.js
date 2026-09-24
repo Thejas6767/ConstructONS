@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { LeadModalProvider } from "@/components/site/LeadModalProvider";
 import { BrochureModalProvider } from "@/components/site/BrochureModalProvider";
 import CookieBanner from "./components/site/CookieBanner";
-
+import PublicAIChat from "@/components/site/PublicAIChat";
 // Lazy-loaded Public Pages
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const HomeDetailPage = lazy(() => import("@/pages/HomeDetailPage"));
@@ -189,7 +189,7 @@ function App() {
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </Suspense>
-
+<PublicAIChat/>
             <CookieBanner />
             <Toaster position="top-right" richColors closeButton />
           </BrochureModalProvider>

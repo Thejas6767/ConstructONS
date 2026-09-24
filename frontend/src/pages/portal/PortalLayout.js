@@ -14,6 +14,7 @@ import { PortalProvider, usePortal } from "./context/PortalContext";
 import PortalSidebar from "./components/PortalSidebar";
 import PortalTopBar from "./components/PortalTopBar";
 import OnboardingWizard from "../../components/site/OnboardingWizard";
+import PortalAIChatWidget from "./components/PortalAIChatWidget";
 
 function NoProjectView() {
   const { user, logout, reload, loading } = usePortal();
@@ -153,6 +154,7 @@ function PortalShell() {
 
   // 3. FULL PORTAL ACCESS
   return (
+
     <div className="h-screen bg-[#F5F6F8] font-['Poppins'] text-[#111111] flex overflow-hidden">
       <Toaster richColors position="top-right" />
       
@@ -163,9 +165,11 @@ function PortalShell() {
         
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
+            <PortalAIChatWidget />
         </main>
       </div>
     </div>
+
   );
 }
 

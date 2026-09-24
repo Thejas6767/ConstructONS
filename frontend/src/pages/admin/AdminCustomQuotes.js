@@ -13,19 +13,22 @@
  *   - Actions: Save, Download PDF, WhatsApp share, Email share
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { adminApi, publicApi, API_BASE } from "@/lib/api";
+import { adminApi, publicApi } from "@/lib/api";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import {
-  Plus, Trash2, Save, X, Pencil, RefreshCw, FileDown, Send, Sparkles,
-  Wand2, IndianRupee, Mail, MessageCircle, Copy, Loader2, ChevronDown,
+  Plus, Trash2, Save, X, Pencil, RefreshCw, FileDown,
+  Wand2, Mail, MessageCircle, Copy, Loader2, ChevronDown,
   ChevronUp, BookOpen, Link as LinkIcon, MessageSquare, Eye, EyeOff, Search,
   History, PackageOpen,
 } from "lucide-react";
 
 const rupees = (n) =>
   `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+
+const inputCls =
+  "w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange transition";
 
 const emptyQuote = () => ({
   status: "draft",
@@ -79,17 +82,30 @@ export default function AdminCustomQuotes() {
     setLoading(true);
     try {
       const [list, pkgs] = await Promise.all([
-        adminApi.customQuotes.list(),
-        publicApi.getPackages(),
+        adminApi.customQuotes.list().catch((err) => {
+          console.error("[AdminCustomQuotes] customQuotes.list failed", err);
+          return [];
+        }),
+        publicApi.getPackages().catch((err) => {
+          console.error("[AdminCustomQuotes] getPackages failed", err);
+          return [];
+        }),
       ]);
-      setItems(list);
-      setPackages(pkgs);
+      setItems(Array.isArray(list) ? list : []);
+      setPackages(Array.isArray(pkgs) ? pkgs : []);
     } catch (e) {
+      console.error("[AdminCustomQuotes] load error", e);
       toast.error("Failed to load custom quotes");
+      setItems([]);
+      setPackages([]);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const startNew = () => setEditing(emptyQuote());
   const startEdit = (row) => setEditing({ ...emptyQuote(), ...row });
@@ -114,8 +130,6 @@ export default function AdminCustomQuotes() {
     }
     setSaving(true);
     try {
-      // Robust numeric coercion helpers so a stray empty-string / comma / typo
-      // never triggers a silent 422 from Pydantic.
       const num = (v, dflt = 0) => {
         if (v === "" || v === null || v === undefined) return dflt;
         const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
@@ -127,10 +141,8 @@ export default function AdminCustomQuotes() {
         return Number.isFinite(n) ? n : null;
       };
 
-      // Coerce numerics
       const payload = {
         ...editing,
-        // Top-level numerics
         plot_area: numOrNull(editing.plot_area),
         built_up_area: num(editing.built_up_area, 0),
         budget: numOrNull(editing.budget),
@@ -140,7 +152,6 @@ export default function AdminCustomQuotes() {
         gst_percent: num(editing.gst_percent, 0),
         warranty_years: Math.trunc(num(editing.warranty_years, 10)),
         valid_days: Math.trunc(num(editing.valid_days, 30)),
-        // Deep numeric coercion in nested arrays (row-level fields user can edit)
         addons: (editing.addons || []).map((a) => ({
           ...a,
           price: num(a?.price, 0),
@@ -161,13 +172,11 @@ export default function AdminCustomQuotes() {
       toast.success(editing.id ? "Quote updated" : "Quote created");
       load();
     } catch (e) {
-      // Surface the ACTUAL reason instead of a mystery "Save failed" toast.
       const detail = e?.response?.data?.detail;
       let msg = "Save failed";
       if (typeof detail === "string" && detail.trim()) {
         msg = detail;
       } else if (Array.isArray(detail) && detail.length > 0) {
-        // Pydantic validation errors — build a readable message.
         const first = detail
           .slice(0, 3)
           .map((d) => {
@@ -196,7 +205,7 @@ export default function AdminCustomQuotes() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto" data-testid="admin-custom-quotes">
+    <div className="max-w-7xl mx-auto font-['Poppins']" data-testid="admin-custom-quotes">
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
           <div className="section-eyebrow">Sales · AI-Powered</div>
@@ -228,7 +237,7 @@ export default function AdminCustomQuotes() {
         {items.length === 0 ? (
           <div className="p-10 text-center">
             <div className="w-14 h-14 mx-auto rounded-full bg-brand-orange/10 grid place-items-center">
-              <Sparkles className="w-7 h-7 text-brand-orange" />
+             
             </div>
             <div className="mt-4 font-semibold text-brand-navy">No custom quotes yet</div>
             <p className="text-sm text-brand-navy/60 mt-1 max-w-md mx-auto">
@@ -401,7 +410,6 @@ function QuoteEditor({ editing, setEditing, packages, saving, onSave, onCancel }
     adminApi.quoteTemplates.list().then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
-  // Same robust numeric coercion used by save() — so preview never trips a 422.
   const _num = (v, dflt = 0) => {
     if (v === "" || v === null || v === undefined) return dflt;
     const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
@@ -412,23 +420,23 @@ function QuoteEditor({ editing, setEditing, packages, saving, onSave, onCancel }
     const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
     return Number.isFinite(n) ? n : null;
   };
-const buildPayload = useCallback((src) => ({
-  ...src,
-  plot_area: _numOrNull(src.plot_area),
-  built_up_area: _num(src.built_up_area, 0),
-  budget: _numOrNull(src.budget),
-  price_per_sqft: _num(src.price_per_sqft, 0),
-  discount_amount: _num(src.discount_amount, 0),
-  service_charge_percent: _num(src.service_charge_percent, 15),
-  gst_percent: _num(src.gst_percent, 0),
-  warranty_years: Math.trunc(_num(src.warranty_years, 10)),
-  valid_days: Math.trunc(_num(src.valid_days, 30)),
-  addons: (src.addons || []).map((a) => ({ ...a, price: _num(a?.price, 0) })),
-  line_items: (src.line_items || []).map((li) => ({ ...li, amount: _num(li?.amount, 0) })),
-  payment_schedule: (src.payment_schedule || []).map((p) => ({ ...p, percentage: _num(p?.percentage, 0) })),
-}), []);
 
-  // Live PDF preview — debounced regenerate when editing changes and preview is on.
+  const buildPayload = useCallback((src) => ({
+    ...src,
+    plot_area: _numOrNull(src.plot_area),
+    built_up_area: _num(src.built_up_area, 0),
+    budget: _numOrNull(src.budget),
+    price_per_sqft: _num(src.price_per_sqft, 0),
+    discount_amount: _num(src.discount_amount, 0),
+    service_charge_percent: _num(src.service_charge_percent, 15),
+    gst_percent: _num(src.gst_percent, 0),
+    warranty_years: Math.trunc(_num(src.warranty_years, 10)),
+    valid_days: Math.trunc(_num(src.valid_days, 30)),
+    addons: (src.addons || []).map((a) => ({ ...a, price: _num(a?.price, 0) })),
+    line_items: (src.line_items || []).map((li) => ({ ...li, amount: _num(li?.amount, 0) })),
+    payment_schedule: (src.payment_schedule || []).map((p) => ({ ...p, percentage: _num(p?.percentage, 0) })),
+  }), []);
+
   useEffect(() => {
     if (!showPreview) return;
     let cancelled = false;
@@ -440,20 +448,16 @@ const buildPayload = useCallback((src) => ({
         const blob = await adminApi.customQuotes.previewPdf(payload);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
-        // Swap the ref first, then commit state — so a rapid re-run of the effect
-        // can still revoke the OLD url via the ref without racing React state.
         const previous = previewUrlRef.current;
         previewUrlRef.current = url;
         setPreviewUrl(url);
         if (previous) {
-          // Small delay so the iframe latches the new URL before the old one dies
           setTimeout(() => URL.revokeObjectURL(previous), 500);
         }
       } catch (e) {
         if (cancelled) return;
         const detail = e?.response?.data;
         let msg = "Preview render failed";
-        // Response is a Blob when responseType='blob' — read text
         if (detail instanceof Blob) {
           try {
             const text = await detail.text();
@@ -466,7 +470,7 @@ const buildPayload = useCallback((src) => ({
                 return path ? `${path}: ${x.msg}` : x.msg;
               }).join(" | ");
             }
-          } catch {/* keep default */ }
+          } catch { }
         } else if (typeof detail?.detail === "string") {
           msg = detail.detail;
         }
@@ -480,28 +484,20 @@ const buildPayload = useCallback((src) => ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [showPreview, editing,buildPayload]);
+  }, [showPreview, editing, buildPayload]);
 
-  // Revoke blob URL on unmount
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
 
-  // Pricing calculations (live)
   const pricing = useMemo(() => {
     const area = Number(editing.built_up_area) || 0;
     const rate = Number(editing.price_per_sqft) || 0;
     const base = area * rate;
-    const addonTotal = (editing.addons || []).reduce(
-      (s, a) => s + (Number(a.price) || 0),
-      0
-    );
-    const lineTotal = (editing.line_items || []).reduce(
-      (s, l) => s + (Number(l.amount) || 0),
-      0
-    );
+    const addonTotal = (editing.addons || []).reduce((s, a) => s + (Number(a.price) || 0), 0);
+    const lineTotal = (editing.line_items || []).reduce((s, l) => s + (Number(l.amount) || 0), 0);
     const interiorsTotal = (editing.interiors || []).reduce((s, cat) => {
       return s + (cat.items || []).reduce((ss, it) => {
         if (!it.include_in_total) return ss;
@@ -523,7 +519,6 @@ const buildPayload = useCallback((src) => ({
   const runAI = async () => {
     setAiLoading(true);
     try {
-      // 1. Start job
       const start = await adminApi.customQuotes.aiSuggest({
         mode: aiMode,
         built_up_area: Number(editing.built_up_area) || 1200,
@@ -538,11 +533,9 @@ const buildPayload = useCallback((src) => ({
       const jobId = start?.job_id;
       if (!jobId) throw new Error("Failed to start AI job");
 
-      // 2. Poll until done or timeout (~3 min max)
       const started = Date.now();
       const MAX_MS = 3 * 60 * 1000;
       let suggestion = null;
-      // small helper
       const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
       while (Date.now() - started < MAX_MS) {
@@ -561,28 +554,17 @@ const buildPayload = useCallback((src) => ({
         throw new Error("AI is taking longer than expected. Please try again.");
       }
 
-      // 3. Merge into editing state without wiping user-entered client info
       setEditing((prev) => ({
         ...prev,
         package_name: suggestion.package_name || prev.package_name,
         price_per_sqft: suggestion.price_per_sqft || prev.price_per_sqft,
-        spec_categories: suggestion.spec_categories?.length
-          ? suggestion.spec_categories
-          : prev.spec_categories,
-        interiors: suggestion.interiors?.length
-          ? suggestion.interiors
-          : prev.interiors,
+        spec_categories: suggestion.spec_categories?.length ? suggestion.spec_categories : prev.spec_categories,
+        interiors: suggestion.interiors?.length ? suggestion.interiors : prev.interiors,
         addons: suggestion.addons || prev.addons,
         line_items: suggestion.line_items || prev.line_items,
-        scope_of_work: suggestion.scope_of_work?.length
-          ? suggestion.scope_of_work
-          : prev.scope_of_work,
-        exclusions: suggestion.exclusions?.length
-          ? suggestion.exclusions
-          : prev.exclusions,
-        payment_schedule: suggestion.payment_schedule?.length
-          ? suggestion.payment_schedule
-          : prev.payment_schedule,
+        scope_of_work: suggestion.scope_of_work?.length ? suggestion.scope_of_work : prev.scope_of_work,
+        exclusions: suggestion.exclusions?.length ? suggestion.exclusions : prev.exclusions,
+        payment_schedule: suggestion.payment_schedule?.length ? suggestion.payment_schedule : prev.payment_schedule,
         warranty_years: suggestion.warranty_years || prev.warranty_years,
         service_charge_percent: suggestion.service_charge_percent ?? 15,
         gst_percent: 0,
@@ -604,7 +586,6 @@ const buildPayload = useCallback((src) => ({
       set({ package_slug: "", package_name: "" });
       return;
     }
-    // Copy over baseline spec/scope/exclusions/schedule from package (deep clone)
     set({
       package_slug: pkg.slug,
       package_name: pkg.name,
@@ -619,19 +600,10 @@ const buildPayload = useCallback((src) => ({
   };
 
   const whatsappShare = () => {
-    if (!editing.id) {
-      toast.error("Save the quote first to generate a shareable link");
-      return;
-    }
-    if (!editing.client_phone) {
-      toast.error("Add client phone number first");
-      return;
-    }
+    if (!editing.id) { toast.error("Save the quote first to generate a shareable link"); return; }
+    if (!editing.client_phone) { toast.error("Add client phone number first"); return; }
     const digits = editing.client_phone.replace(/\D/g, "");
-    if (!digits) {
-      toast.error("Invalid phone number");
-      return;
-    }
+    if (!digits) { toast.error("Invalid phone number"); return; }
     const pdfUrl = adminApi.customQuotes.pdfUrl(editing.id);
     const msg = encodeURIComponent(
       `Hi ${editing.client_name || "there"},\n\n` +
@@ -647,18 +619,10 @@ const buildPayload = useCallback((src) => ({
   };
 
   const emailShare = () => {
-    if (!editing.id) {
-      toast.error("Save the quote first to generate a shareable link");
-      return;
-    }
-    if (!editing.client_email) {
-      toast.error("Add client email first");
-      return;
-    }
+    if (!editing.id) { toast.error("Save the quote first to generate a shareable link"); return; }
+    if (!editing.client_email) { toast.error("Add client email first"); return; }
     const pdfUrl = adminApi.customQuotes.pdfUrl(editing.id);
-    const subject = encodeURIComponent(
-      `Your ConstructONS Customised Quotation — ${editing.ref_number || ""}`
-    );
+    const subject = encodeURIComponent(`Your ConstructONS Customised Quotation — ${editing.ref_number || ""}`);
     const body = encodeURIComponent(
       `Hi ${editing.client_name || "there"},\n\n` +
       `Please find your customised home construction quotation attached / linked below.\n\n` +
@@ -673,10 +637,7 @@ const buildPayload = useCallback((src) => ({
   };
 
   const copyPdfLink = async () => {
-    if (!editing.id) {
-      toast.error("Save the quote first to generate a link");
-      return;
-    }
+    if (!editing.id) { toast.error("Save the quote first to generate a link"); return; }
     const link = adminApi.customQuotes.pdfUrl(editing.id);
     try {
       await navigator.clipboard.writeText(link);
@@ -687,10 +648,7 @@ const buildPayload = useCallback((src) => ({
   };
 
   const generatePublicLink = async () => {
-    if (!editing.id) {
-      toast.error("Save the quote first");
-      return;
-    }
+    if (!editing.id) { toast.error("Save the quote first"); return; }
     try {
       const data = await adminApi.customQuotes.getPublicLink(editing.id);
       setPublicLink(data.public_token);
@@ -734,14 +692,8 @@ const buildPayload = useCallback((src) => ({
   };
 
   const saveAsTemplate = async () => {
-    if (!editing.id) {
-      toast.error("Save the quote first");
-      return;
-    }
-    if (!tplName.trim()) {
-      toast.error("Template name is required");
-      return;
-    }
+    if (!editing.id) { toast.error("Save the quote first"); return; }
+    if (!tplName.trim()) { toast.error("Template name is required"); return; }
     setSavingTpl(true);
     try {
       await adminApi.customQuotes.saveAsTemplate(editing.id, {
@@ -763,7 +715,6 @@ const buildPayload = useCallback((src) => ({
 
   return (
     <>
-      {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -771,7 +722,6 @@ const buildPayload = useCallback((src) => ({
         onClick={onCancel}
         className="fixed inset-0 bg-brand-navy/50 backdrop-blur-sm z-40"
       />
-      {/* Drawer */}
       <motion.div
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
@@ -794,8 +744,7 @@ const buildPayload = useCallback((src) => ({
             <button
               onClick={() => setShowPreview((v) => !v)}
               data-testid="cq-toggle-preview"
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition ${showPreview ? "bg-brand-navy text-white" : "border border-black/10 bg-white text-brand-navy hover:bg-brand-bg"
-                }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition ${showPreview ? "bg-brand-navy text-white" : "border border-black/10 bg-white text-brand-navy hover:bg-brand-bg"}`}
             >
               {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               {showPreview ? "Hide Preview" : "Preview PDF"}
@@ -804,14 +753,14 @@ const buildPayload = useCallback((src) => ({
               onClick={onSave}
               disabled={saving}
               data-testid="cq-save-btn"
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-4 py-2 text-sm font-semibold hover:brightness-95 transition disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-4 py-2 text-sm font-semibold hover:brightness-95 transition disabled:opacity-60 cursor-pointer"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save
             </button>
             <button
               onClick={onCancel}
-              className="w-9 h-9 rounded-full grid place-items-center hover:bg-brand-bg text-brand-navy"
+              className="w-9 h-9 rounded-full grid place-items-center hover:bg-brand-bg text-brand-navy cursor-pointer"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -822,8 +771,8 @@ const buildPayload = useCallback((src) => ({
         {/* Body */}
         <div className={`flex ${showPreview ? "flex-row" : "flex-col"} h-[calc(100vh-73px)]`}>
           <div className={`${showPreview ? "w-1/2 border-r border-black/5" : "w-full"} overflow-y-auto px-5 md:px-8 py-6 space-y-6`}>
-            {/* form body starts here (unchanged) */}
-            {/* Actions row for saved quotes */}
+            
+            {/* Share actions */}
             {editing.id && (
               <div className="rounded-2xl bg-white border border-black/5 p-4 flex flex-wrap items-center gap-2">
                 <div className="text-xs text-brand-navy/60 mr-2 font-medium">Share this quote:</div>
@@ -881,7 +830,7 @@ const buildPayload = useCallback((src) => ({
               </div>
             )}
 
-            {/* Public Client Portal Link */}
+            {/* Public Link */}
             {editing.id && (
               <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 p-5" data-testid="cq-public-link-section">
                 <div className="flex items-start gap-3">
@@ -924,10 +873,9 @@ const buildPayload = useCallback((src) => ({
                       </button>
                     )}
                     {editing.client_action && (
-                      <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${editing.client_action === "accepted"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-red-100 text-red-800"
-                        }`}>
+                      <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                        editing.client_action === "accepted" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                      }`}>
                         Client {editing.client_action} on {new Date(editing.client_action_at).toLocaleString()}
                       </div>
                     )}
@@ -936,7 +884,7 @@ const buildPayload = useCallback((src) => ({
               </div>
             )}
 
-            {/* Load Template */}
+            {/* Template loader */}
             {templates.length > 0 && !editing.id && (
               <div className="rounded-2xl bg-white border border-black/5 p-4 flex flex-wrap items-center gap-2" data-testid="cq-template-loader">
                 <BookOpen className="w-4 h-4 text-brand-orange" />
@@ -1091,38 +1039,28 @@ const buildPayload = useCallback((src) => ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs uppercase tracking-widest text-brand-orangeLight">
-                    AI Quote Assistant · GPT-5
+                    AI Quote Assistant · Gemini Flash
                   </div>
                   <div className="font-bold text-lg mt-1">Generate a draft based on requirements</div>
                   <p className="text-sm text-white/70 mt-1">
-                    Pick a mode — the AI will draft specs, addons, pricing, scope & payment schedule.
-                    Everything is editable before download.
+                    Pick a mode — the AI will draft specs, addons, pricing, scope &amp; payment schedule.
                   </p>
 
-                  {/* Mode toggle */}
                   <div className="mt-4 inline-flex rounded-full bg-white/10 p-1">
                     <button
                       onClick={() => setAiMode("recommend")}
                       data-testid="cq-ai-mode-recommend"
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${aiMode === "recommend" ? "bg-brand-orange text-white" : "text-white/70 hover:text-white"
-                        }`}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${aiMode === "recommend" ? "bg-brand-orange text-white" : "text-white/70 hover:text-white"}`}
                     >
                       Recommend + tune
                     </button>
                     <button
                       onClick={() => setAiMode("scratch")}
                       data-testid="cq-ai-mode-scratch"
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${aiMode === "scratch" ? "bg-brand-orange text-white" : "text-white/70 hover:text-white"
-                        }`}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${aiMode === "scratch" ? "bg-brand-orange text-white" : "text-white/70 hover:text-white"}`}
                     >
                       Build from scratch
                     </button>
-                  </div>
-
-                  <div className="mt-3 text-xs text-white/60">
-                    {aiMode === "recommend"
-                      ? "Anchors on the selected base package below and proposes upgrades/downgrades to fit the budget."
-                      : "Ignores base packages and drafts a fully bespoke spec sheet from client requirements."}
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1132,14 +1070,9 @@ const buildPayload = useCallback((src) => ({
                       data-testid="cq-ai-generate"
                       className="inline-flex items-center gap-2 rounded-full bg-brand-orange text-white px-5 py-2.5 text-sm font-semibold hover:brightness-95 transition disabled:opacity-60"
                     >
-                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      {aiLoading ? "Drafting... (60-120s)" : "Generate AI Draft"}
+                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                      {aiLoading ? "Drafting..." : "Generate AI Draft"}
                     </button>
-                    {aiLoading && (
-                      <div className="text-xs text-white/60">
-                        GPT-5 is analysing requirements & drafting full specs. Hang tight — this takes about a minute.
-                      </div>
-                    )}
                     {editing.ai_notes && (
                       <div className="text-xs text-white/60 max-w-xl">
                         <span className="text-brand-orangeLight font-semibold">AI notes:</span> {editing.ai_notes}
@@ -1167,9 +1100,6 @@ const buildPayload = useCallback((src) => ({
                     ))}
                   </select>
                 </Field>
-                <div className="text-xs text-brand-navy/50 mt-1">
-                  Loads that package's baseline specs, scope, exclusions & payment schedule (fully editable below).
-                </div>
               </div>
 
               <SpecCategoryEditor
@@ -1190,12 +1120,12 @@ const buildPayload = useCallback((src) => ({
             <Section title="Interior Fit-Out" testId="cq-section-interiors" defaultOpen>
               <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
                 <div className="text-xs text-brand-navy/60 flex-1 min-w-0">
-                  Add interior items (kitchen, wardrobes, lighting, bath, furnishings). Tick "Bill" on any item to include its rate × qty in the grand total. Notes and rates appear on the PDF.
+                  Add interior items. Tick "Bill" to include rate × qty in the grand total.
                 </div>
                 <button
                   onClick={() => setShowLibraryPicker(true)}
                   data-testid="cq-open-library"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-3.5 py-1.5 text-xs font-semibold hover:brightness-95"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-3.5 py-1.5 text-xs font-semibold hover:brightness-95 cursor-pointer"
                 >
                   <PackageOpen className="w-3.5 h-3.5" /> Add from Library
                 </button>
@@ -1209,9 +1139,6 @@ const buildPayload = useCallback((src) => ({
 
             {/* Material Specification */}
             <Section title="Material Specification" testId="cq-section-materials">
-              <div className="text-xs text-brand-navy/60 mb-3">
-                Standard brand/grade included per line-item. This appears as a dedicated table in the PDF after all specification sheets and before the Payment Schedule.
-              </div>
               <MaterialSpecEditor
                 rows={editing.material_specs || []}
                 onChange={(material_specs) => set({ material_specs })}
@@ -1220,9 +1147,6 @@ const buildPayload = useCallback((src) => ({
 
             {/* Floor Plans */}
             <Section title="Floor Plans" testId="cq-section-floor-plans">
-              <div className="text-xs text-brand-navy/60 mb-3">
-                Upload one floor plan image per sheet. Fill the CAD title block (units, scale, drawn by, north). Each sheet renders as a full A4 page in the PDF.
-              </div>
               <DrawingSheetsEditor
                 sheets={editing.floor_plans || []}
                 onChange={(floor_plans) => set({ floor_plans })}
@@ -1232,9 +1156,6 @@ const buildPayload = useCallback((src) => ({
 
             {/* Elevations */}
             <Section title="Elevations" testId="cq-section-elevations">
-              <div className="text-xs text-brand-navy/60 mb-3">
-                Upload elevation drawings (north/south/east/west or perspective).
-              </div>
               <DrawingSheetsEditor
                 sheets={editing.elevations || []}
                 onChange={(elevations) => set({ elevations })}
@@ -1244,9 +1165,6 @@ const buildPayload = useCallback((src) => ({
 
             {/* Visual Boards */}
             <Section title="Visual Boards & AI Renders" testId="cq-section-visuals">
-              <div className="text-xs text-brand-navy/60 mb-3">
-                Add mood boards, photos of finishes, or generate AI reference images (Gemini Nano Banana). These render in the PDF as image galleries.
-              </div>
               <VisualBoardsEditor
                 boards={editing.visual_boards || []}
                 onChange={(visual_boards) => set({ visual_boards })}
@@ -1277,7 +1195,7 @@ const buildPayload = useCallback((src) => ({
                     value={editing.discount_label || ""}
                     onChange={(e) => set({ discount_label: e.target.value })}
                     className={inputCls}
-                    placeholder="e.g. Diwali offer"
+                    placeholder="e.g. Festive Discount"
                   />
                 </Field>
                 <Field label="Discount Amount (₹)" testId="cq-field-disc-amt">
@@ -1288,23 +1206,12 @@ const buildPayload = useCallback((src) => ({
                     className={inputCls}
                   />
                 </Field>
-                <Field label="GST % (deprecated)" testId="cq-field-gst">
-                  <input
-                    type="number"
-                    value={editing.gst_percent || 0}
-                    onChange={(e) => set({ gst_percent: e.target.value })}
-                    className={inputCls}
-                    disabled
-                    placeholder="0 — replaced by service charge"
-                  />
-                </Field>
-                <Field label="Service Charge % (contractor fee)" testId="cq-field-service">
+                <Field label="Service Charge %" testId="cq-field-service">
                   <input
                     type="number"
                     value={editing.service_charge_percent ?? 15}
                     onChange={(e) => set({ service_charge_percent: e.target.value })}
                     className={inputCls}
-                    placeholder="15"
                   />
                 </Field>
                 <Field label="Warranty (years)" testId="cq-field-warranty">
@@ -1315,17 +1222,8 @@ const buildPayload = useCallback((src) => ({
                     className={inputCls}
                   />
                 </Field>
-                <Field label="Valid For (days)" testId="cq-field-valid">
-                  <input
-                    type="number"
-                    value={editing.valid_days || 30}
-                    onChange={(e) => set({ valid_days: e.target.value })}
-                    className={inputCls}
-                  />
-                </Field>
               </Grid>
 
-              {/* Live pricing preview */}
               <div className="mt-4 rounded-xl bg-brand-navy text-white p-4">
                 <div className="text-xs uppercase tracking-widest text-brand-orangeLight">Live Pricing</div>
                 <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
@@ -1336,7 +1234,7 @@ const buildPayload = useCallback((src) => ({
                   {pricing.discount > 0 && (
                     <PriceLine label="Discount" value={-pricing.discount} negative />
                   )}
-                  <PriceLine label={`GST @ ${editing.gst_percent || 0}%`} value={pricing.gstAmt} />
+                  <PriceLine label={`Service Charge (${pricing.svcPct}%)`} value={pricing.svcAmt} />
                 </div>
                 <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between">
                   <div className="text-sm text-white/70">Grand Total</div>
@@ -1344,18 +1242,10 @@ const buildPayload = useCallback((src) => ({
                     {rupees(pricing.grand)}
                   </div>
                 </div>
-                {pricing.budgetDelta !== null && (
-                  <div className="mt-2 text-xs text-white/60">
-                    Client budget {rupees(editing.budget)} —{" "}
-                    <span className={pricing.budgetDelta > 0 ? "text-red-300" : "text-emerald-300"}>
-                      {pricing.budgetDelta > 0 ? "over" : "under"} by {rupees(Math.abs(pricing.budgetDelta))}
-                    </span>
-                  </div>
-                )}
               </div>
             </Section>
 
-            {/* Scope of Work */}
+            {/* Scope */}
             <Section title="Scope of Work" testId="cq-section-scope">
               <ListEditor
                 items={editing.scope_of_work || []}
@@ -1369,7 +1259,7 @@ const buildPayload = useCallback((src) => ({
               <ListEditor
                 items={editing.exclusions || []}
                 onChange={(exclusions) => set({ exclusions })}
-                placeholder="e.g. Government approvals & fees"
+                placeholder="e.g. Government approval fees"
               />
             </Section>
 
@@ -1429,33 +1319,32 @@ const buildPayload = useCallback((src) => ({
               </div>
             </Section>
 
-            <div className="pt-2 flex items-center gap-3 sticky bottom-0 bg-brand-bg py-4">
+            <div className="pt-2 flex items-center gap-3 sticky bottom-0 bg-brand-bg py-4 z-10">
               <button
                 onClick={onSave}
                 disabled={saving}
                 data-testid="cq-save-btn-bottom"
-                className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-5 py-2.5 text-sm font-semibold hover:brightness-95 transition disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-5 py-2.5 text-sm font-semibold hover:brightness-95 transition disabled:opacity-60 cursor-pointer"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save Quote
               </button>
               <button
                 onClick={onCancel}
-                className="rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-semibold text-brand-navy hover:bg-brand-bg"
+                className="rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-semibold text-brand-navy hover:bg-brand-bg cursor-pointer"
               >
                 Close
               </button>
             </div>
-          </div>{/* end form column */}
+          </div>
 
-          {/* PDF Preview column */}
+          {/* PDF Preview Column */}
           {showPreview && (
             <div className="w-1/2 bg-brand-navy/95 relative flex flex-col" data-testid="cq-preview-panel">
               <div className="p-3 flex items-center justify-between text-white text-xs">
                 <div className="inline-flex items-center gap-2">
                   <Eye className="w-4 h-4 text-brand-orange" />
                   <span className="font-semibold uppercase tracking-wider">Live PDF Preview</span>
-                  <span className="text-white/40 hidden md:inline">— auto-refreshes as you edit</span>
                 </div>
                 <div className="inline-flex items-center gap-3">
                   {previewLoading && (
@@ -1484,20 +1373,12 @@ const buildPayload = useCallback((src) => ({
               )}
               <div className="flex-1 bg-white">
                 {previewUrl ? (
-                  <object
-                    key={previewUrl}
-                    data={previewUrl}
-                    type="application/pdf"
-                    className="w-full h-full"
-                    aria-label="PDF Preview"
+                  <iframe
+                    src={previewUrl}
+                    title="PDF Preview"
+                    className="w-full h-full border-0"
                     data-testid="cq-preview-iframe"
-                  >
-                    <iframe
-                      src={previewUrl}
-                      title="PDF Preview"
-                      className="w-full h-full border-0"
-                    />
-                  </object>
+                  />
                 ) : (
                   <div className="w-full h-full grid place-items-center text-brand-navy/40 text-sm">
                     {previewLoading ? "Building preview..." : (previewError ? "" : "Preview will appear here")}
@@ -1506,9 +1387,9 @@ const buildPayload = useCallback((src) => ({
               </div>
             </div>
           )}
-        </div>{/* end split body */}
+        </div>
 
-        {/* Save-as-Template modal */}
+        {/* Template Modal */}
         {showTplModal && (
           <div className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-[60] grid place-items-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-md p-6" data-testid="cq-template-modal">
@@ -1516,7 +1397,7 @@ const buildPayload = useCallback((src) => ({
                 <BookOpen className="w-5 h-5 text-brand-orange" /> Save as Template
               </div>
               <p className="text-sm text-brand-navy/60 mt-1">
-                Snapshot this quote's specs, pricing, scope, exclusions, schedule and terms for reuse.
+                Snapshot this quote's specs and details for future reuse.
               </p>
               <label className="block mt-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-brand-navy/60 mb-1.5">Template Name *</div>
@@ -1541,7 +1422,7 @@ const buildPayload = useCallback((src) => ({
               <div className="mt-5 flex items-center gap-2 justify-end">
                 <button
                   onClick={() => { setShowTplModal(false); setTplName(""); setTplDesc(""); }}
-                  className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-brand-navy"
+                  className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-brand-navy cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1549,7 +1430,7 @@ const buildPayload = useCallback((src) => ({
                   onClick={saveAsTemplate}
                   disabled={savingTpl}
                   data-testid="cq-tpl-save-confirm"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-5 py-2 text-sm font-semibold"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-5 py-2 text-sm font-semibold cursor-pointer"
                 >
                   {savingTpl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Template
                 </button>
@@ -1558,12 +1439,11 @@ const buildPayload = useCallback((src) => ({
           </div>
         )}
 
-        {/* Interior Library picker modal */}
+        {/* Interior Library Picker */}
         {showLibraryPicker && (
           <InteriorLibraryPicker
             onClose={() => setShowLibraryPicker(false)}
             onAdd={(items) => {
-              // Group picked items by their library category into interior categories
               const existing = [...(editing.interiors || [])];
               items.forEach((it) => {
                 let cat = existing.find((c) => c.name === it.category);
@@ -1594,34 +1474,17 @@ const buildPayload = useCallback((src) => ({
   );
 }
 
-// ---------------------- Reusable UI ----------------------
-const inputCls =
-  "w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange transition";
+// ---------------------- Sub-Editors & Helpers ----------------------
 
-function Grid({ children }) {
-  return <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>;
-}
+function Grid({ children }) { return <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>; }
 
-function Field({ label, testId, children }) {
-  return (
-    <label className="block" data-testid={testId}>
-      <div className="text-xs font-semibold uppercase tracking-wider text-brand-navy/60 mb-1.5">
-        {label}
-      </div>
-      {children}
-    </label>
-  );
-}
+function Field({ label, testId, children }) { return <label className="block" data-testid={testId}><div className="text-xs font-semibold uppercase tracking-wider text-brand-navy/60 mb-1.5">{label}</div>{children}</label>; }
 
 function Section({ title, testId, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="rounded-2xl bg-white border border-black/5 shadow-soft overflow-hidden" data-testid={testId}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-bg/50 transition"
-      >
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-bg/50 transition">
         <div className="font-semibold text-brand-navy">{title}</div>
         {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
@@ -1634,297 +1497,15 @@ function PriceLine({ label, value, bold, negative }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-widest text-white/50">{label}</div>
-      <div className={`${bold ? "text-lg font-bold" : "text-base"} ${negative ? "text-red-300" : ""}`}>
-        {rupees(value)}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Sub-editors ----------
-
-function SpecCategoryEditor({ categories, onChange, isInterior = false }) {
-  const addCat = () =>
-    onChange([...(categories || []), { name: "New Category", icon: null, items: [] }]);
-
-  const updateCat = (idx, patch) => {
-    const next = categories.map((c, i) => (i === idx ? { ...c, ...patch } : c));
-    onChange(next);
-  };
-
-  const removeCat = (idx) => onChange(categories.filter((_, i) => i !== idx));
-
-  const addItem = (idx) => {
-    const cat = categories[idx];
-    const emptyItem = isInterior
-      ? { spec: "", value: "", brand: "", rate: 0, rate_unit: "per unit", quantity: 1, include_in_total: true, notes: "" }
-      : { spec: "", value: "", brand: "", warranty: "", rate: 0, rate_unit: "", notes: "", include_in_total: false };
-    updateCat(idx, { items: [...(cat.items || []), emptyItem] });
-  };
-
-  const updateItem = (catIdx, itemIdx, patch) => {
-    const cat = categories[catIdx];
-    const items = (cat.items || []).map((it, i) => (i === itemIdx ? { ...it, ...patch } : it));
-    updateCat(catIdx, { items });
-  };
-
-  const removeItem = (catIdx, itemIdx) => {
-    const cat = categories[catIdx];
-    updateCat(catIdx, { items: (cat.items || []).filter((_, i) => i !== itemIdx) });
-  };
-
-  if ((categories || []).length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-black/15 p-6 text-center">
-        <div className="text-sm text-brand-navy/60">
-          {isInterior
-            ? "No interior categories yet. Add categories like Kitchen, Wardrobes, Lighting, Bathroom accessories, Furnishings."
-            : "No spec categories yet. Pick a base package above or click below to add one manually."}
-        </div>
-        <button
-          onClick={addCat}
-          data-testid={`cq-add-cat-empty-${isInterior ? "int" : "spec"}`}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add {isInterior ? "Interior" : "Spec"} Category
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {categories.map((cat, ci) => (
-        <div key={ci} className="rounded-xl border border-black/10 bg-brand-bg/30 overflow-hidden">
-          <div className="flex items-center gap-2 p-3 bg-white border-b border-black/5">
-            <input
-              value={cat.name || ""}
-              onChange={(e) => updateCat(ci, { name: e.target.value })}
-              className="flex-1 font-semibold text-brand-navy bg-transparent focus:outline-none"
-              placeholder="Category name"
-              data-testid={`cq-cat-${isInterior ? "int" : "spec"}-${ci}-name`}
-            />
-            <button
-              onClick={() => addItem(ci)}
-              data-testid={`cq-cat-${isInterior ? "int" : "spec"}-${ci}-add-item`}
-              className="text-xs inline-flex items-center gap-1 text-brand-orange hover:underline"
-            >
-              <Plus className="w-3 h-3" /> Add item
-            </button>
-            <button
-              onClick={() => removeCat(ci)}
-              className="w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500"
-              title="Remove category"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="divide-y divide-black/5">
-            {(cat.items || []).length === 0 ? (
-              <div className="p-4 text-xs text-brand-navy/50 text-center">
-                No items yet — click "Add item" above.
-              </div>
-            ) : (
-              cat.items.map((it, ii) => (
-                <div key={ii} className="p-3 bg-white">
-                  <div className="grid grid-cols-12 gap-2 items-center">
-                    <input
-                      value={it.spec || ""}
-                      onChange={(e) => updateItem(ci, ii, { spec: e.target.value })}
-                      className="col-span-3 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                      placeholder="Spec / Item name"
-                    />
-                    <input
-                      value={it.value || ""}
-                      onChange={(e) => updateItem(ci, ii, { value: e.target.value })}
-                      className="col-span-4 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                      placeholder="Description"
-                    />
-                    <input
-                      value={it.brand || ""}
-                      onChange={(e) => updateItem(ci, ii, { brand: e.target.value })}
-                      className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                      placeholder="Brand"
-                    />
-                    {!isInterior && (
-                      <input
-                        value={it.warranty || ""}
-                        onChange={(e) => updateItem(ci, ii, { warranty: e.target.value })}
-                        className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                        placeholder="Warranty"
-                      />
-                    )}
-                    {isInterior && (
-                      <input
-                        type="number"
-                        value={it.quantity || 1}
-                        onChange={(e) => updateItem(ci, ii, { quantity: Number(e.target.value) || 0 })}
-                        className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                        placeholder="Qty"
-                      />
-                    )}
-                    <button
-                      onClick={() => removeItem(ci, ii)}
-                      className="col-span-1 w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500 mx-auto"
-                      aria-label="Remove item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-12 gap-2 items-center mt-2">
-                    <div className="col-span-3 flex items-center gap-1">
-                      <span className="text-[10px] text-brand-navy/50">₹</span>
-                      <input
-                        type="number"
-                        value={it.rate || 0}
-                        onChange={(e) => updateItem(ci, ii, { rate: Number(e.target.value) || 0 })}
-                        className="flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                        placeholder="Rate"
-                      />
-                    </div>
-                    <input
-                      value={it.rate_unit || ""}
-                      onChange={(e) => updateItem(ci, ii, { rate_unit: e.target.value })}
-                      className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                      placeholder="per sqft/unit/bag"
-                    />
-                    <input
-                      value={it.notes || ""}
-                      onChange={(e) => updateItem(ci, ii, { notes: e.target.value })}
-                      className="col-span-6 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                      placeholder="Notes (visible on PDF)"
-                    />
-                    <label className="col-span-1 flex items-center justify-center gap-1 text-[10px] text-brand-navy/60 cursor-pointer" title="Include this item's rate × qty in the total">
-                      <input
-                        type="checkbox"
-                        checked={!!it.include_in_total}
-                        onChange={(e) => updateItem(ci, ii, { include_in_total: e.target.checked })}
-                        className="accent-brand-orange"
-                      />
-                      Bill
-                    </label>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      ))}
-      <button
-        onClick={addCat}
-        data-testid={`cq-add-cat-btn-${isInterior ? "int" : "spec"}`}
-        className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"
-      >
-        <Plus className="w-3.5 h-3.5" /> Add Category
-      </button>
-    </div>
-  );
-}
-
-function AddOnEditor({ items, onChange }) {
-  const add = () => onChange([...(items || []), { name: "", description: "", price: 0, unit: "" }]);
-  const update = (i, patch) => onChange(items.map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
-  const remove = (i) => onChange(items.filter((_, ii) => ii !== i));
-
-  return (
-    <div className="space-y-2">
-      {(items || []).map((it, i) => (
-        <div key={i} className="grid grid-cols-12 gap-2 items-center">
-          <input
-            value={it.name || ""}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="col-span-3 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Add-on name"
-          />
-          <input
-            value={it.description || ""}
-            onChange={(e) => update(i, { description: e.target.value })}
-            className="col-span-5 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Description"
-          />
-          <input
-            type="number"
-            value={it.price || 0}
-            onChange={(e) => update(i, { price: e.target.value })}
-            className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Price (₹)"
-          />
-          <input
-            value={it.unit || ""}
-            onChange={(e) => update(i, { unit: e.target.value })}
-            className="col-span-1 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Unit"
-          />
-          <button
-            onClick={() => remove(i)}
-            className="col-span-1 w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500 mx-auto"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={add}
-        data-testid="cq-add-addon"
-        className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"
-      >
-        <Plus className="w-3.5 h-3.5" /> Add Add-on
-      </button>
-    </div>
-  );
-}
-
-function LineItemEditor({ items, onChange }) {
-  const add = () => onChange([...(items || []), { name: "", description: "", amount: 0 }]);
-  const update = (i, patch) => onChange(items.map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
-  const remove = (i) => onChange(items.filter((_, ii) => ii !== i));
-
-  return (
-    <div className="space-y-2">
-      {(items || []).map((it, i) => (
-        <div key={i} className="grid grid-cols-12 gap-2 items-center">
-          <input
-            value={it.name || ""}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="col-span-3 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Item name"
-          />
-          <input
-            value={it.description || ""}
-            onChange={(e) => update(i, { description: e.target.value })}
-            className="col-span-6 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Description"
-          />
-          <input
-            type="number"
-            value={it.amount || 0}
-            onChange={(e) => update(i, { amount: e.target.value })}
-            className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-            placeholder="Amount (₹)"
-          />
-          <button
-            onClick={() => remove(i)}
-            className="col-span-1 w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500 mx-auto"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={add}
-        data-testid="cq-add-line"
-        className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"
-      >
-        <Plus className="w-3.5 h-3.5" /> Add Line Item
-      </button>
+      <div className={`${bold ? "text-lg font-bold" : "text-base"} ${negative ? "text-red-300" : ""}`}>{rupees(value)}</div>
     </div>
   );
 }
 
 function ListEditor({ items, onChange, placeholder }) {
   const add = () => onChange([...(items || []), ""]);
-  const update = (i, v) => onChange(items.map((it, ii) => (ii === i ? v : it)));
-  const remove = (i) => onChange(items.filter((_, ii) => ii !== i));
+  const update = (i, v) => onChange((items || []).map((it, ii) => (ii === i ? v : it)));
+  const remove = (i) => onChange((items || []).filter((_, ii) => ii !== i));
 
   return (
     <div className="space-y-2">
@@ -1933,12 +1514,12 @@ function ListEditor({ items, onChange, placeholder }) {
           <input
             value={it}
             onChange={(e) => update(i, e.target.value)}
-            className="flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-sm"
+            className="flex-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
             placeholder={placeholder}
           />
           <button
             onClick={() => remove(i)}
-            className="w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500"
+            className="w-8 h-8 rounded-full grid place-items-center hover:bg-red-50 text-red-500"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -1957,8 +1538,8 @@ function ListEditor({ items, onChange, placeholder }) {
 function ScheduleEditor({ items, onChange }) {
   const add = () =>
     onChange([...(items || []), { milestone: "", percentage: 0, description: "" }]);
-  const update = (i, patch) => onChange(items.map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
-  const remove = (i) => onChange(items.filter((_, ii) => ii !== i));
+  const update = (i, patch) => onChange((items || []).map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
+  const remove = (i) => onChange((items || []).filter((_, ii) => ii !== i));
 
   const total = (items || []).reduce((s, i) => s + (Number(i.percentage) || 0), 0);
 
@@ -1969,20 +1550,20 @@ function ScheduleEditor({ items, onChange }) {
           <input
             value={it.milestone || ""}
             onChange={(e) => update(i, { milestone: e.target.value })}
-            className="col-span-4 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
+            className="col-span-4 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs"
             placeholder="Milestone (e.g. Foundation)"
           />
           <input
             type="number"
             value={it.percentage || 0}
             onChange={(e) => update(i, { percentage: e.target.value })}
-            className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
+            className="col-span-2 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-bold"
             placeholder="%"
           />
           <input
             value={it.description || ""}
             onChange={(e) => update(i, { description: e.target.value })}
-            className="col-span-5 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
+            className="col-span-5 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs"
             placeholder="Description"
           />
           <button
@@ -1996,7 +1577,7 @@ function ScheduleEditor({ items, onChange }) {
       <div className="flex items-center justify-between text-xs text-brand-navy/60 pt-1">
         <span>Milestone total: {total.toFixed(0)}%</span>
         {Math.abs(total - 100) > 0.5 && total > 0 && (
-          <span className="text-amber-600">Should sum to 100%</span>
+          <span className="text-amber-600 font-semibold">Should sum to 100%</span>
         )}
       </div>
       <button
@@ -2009,8 +1590,6 @@ function ScheduleEditor({ items, onChange }) {
   );
 }
 
-
-// ---------- Material Specification Editor ----------
 const DEFAULT_MATERIAL_ROWS = [
   { category: "Structure", item: "Cement", brand_grade: "UltraTech / Ambuja (OPC 43 Grade)", notes: "Base Price - Rs. 410 / bag" },
   { category: "Structure", item: "Steel/TMT Bars", brand_grade: "SK Super / JSW Neosteel Fe-550D", notes: "Base Price - Rs. 65,000 / MT" },
@@ -2067,51 +1646,45 @@ function MaterialSpecEditor({ rows, onChange }) {
                 <th className="w-8"></th>
               </tr>
             </thead>
-            <tbody className="bg-white">
+            <tbody className="bg-white divide-y divide-black/5">
               {list.map((r, i) => (
-                <tr key={i} className="border-t border-black/5 hover:bg-brand-bg/40">
+                <tr key={i} className="hover:bg-brand-bg/40">
                   <td className="px-1.5 py-1.5">
                     <input
                       value={r.category || ""}
                       onChange={(e) => update(i, { category: e.target.value })}
-                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs focus:outline-none focus:border-brand-orange"
+                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs"
                       placeholder="Structure"
-                      data-testid={`cq-mat-cat-${i}`}
                     />
                   </td>
                   <td className="px-1.5 py-1.5">
                     <input
                       value={r.item || ""}
                       onChange={(e) => update(i, { item: e.target.value })}
-                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs focus:outline-none focus:border-brand-orange"
+                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs"
                       placeholder="Cement"
-                      data-testid={`cq-mat-item-${i}`}
                     />
                   </td>
                   <td className="px-1.5 py-1.5">
                     <input
                       value={r.brand_grade || ""}
                       onChange={(e) => update(i, { brand_grade: e.target.value })}
-                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs focus:outline-none focus:border-brand-orange"
-                      placeholder="UltraTech / Ambuja (OPC 43 Grade)"
-                      data-testid={`cq-mat-brand-${i}`}
+                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs"
+                      placeholder="UltraTech / Ambuja"
                     />
                   </td>
                   <td className="px-1.5 py-1.5">
                     <input
                       value={r.notes || ""}
                       onChange={(e) => update(i, { notes: e.target.value })}
-                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs italic text-brand-navy/70 focus:outline-none focus:border-brand-orange"
+                      className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs italic"
                       placeholder="Base Price - Rs. 410 / bag"
-                      data-testid={`cq-mat-notes-${i}`}
                     />
                   </td>
                   <td className="px-1 py-1.5 align-middle">
                     <button
                       onClick={() => remove(i)}
                       className="w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500 mx-auto"
-                      data-testid={`cq-mat-remove-${i}`}
-                      aria-label="Remove row"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -2125,15 +1698,13 @@ function MaterialSpecEditor({ rows, onChange }) {
       <div className="flex items-center gap-2 flex-wrap pt-1">
         <button
           onClick={add}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold hover:brightness-110"
-          data-testid="cq-mat-add"
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"
         >
           <Plus className="w-3.5 h-3.5" /> Add Row
         </button>
         <button
           onClick={loadDefaults}
           className="inline-flex items-center gap-1.5 rounded-full border border-brand-navy/15 bg-white text-brand-navy px-4 py-1.5 text-xs font-semibold hover:bg-brand-navy/5"
-          data-testid="cq-mat-load-defaults"
           type="button"
         >
           Load Standard Template (19 rows)
@@ -2142,23 +1713,18 @@ function MaterialSpecEditor({ rows, onChange }) {
           <button
             onClick={clearAll}
             className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white text-red-600 px-4 py-1.5 text-xs font-semibold hover:bg-red-50"
-            data-testid="cq-mat-clear"
             type="button"
           >
             Clear all
           </button>
         )}
-        <div className="text-[11px] text-brand-navy/50 ml-auto">{list.length} row{list.length === 1 ? "" : "s"}</div>
       </div>
     </div>
   );
 }
 
-
-// ---------- Drawing Sheets Editor (Floor Plans / Elevations) ----------
 function DrawingSheetsEditor({ sheets, onChange, kind }) {
   const [uploading, setUploading] = useState(null);
-  const [expandedRevs, setExpandedRevs] = useState({});
   const addSheet = () =>
     onChange([...(sheets || []), {
       id: crypto.randomUUID?.() || String(Date.now()),
@@ -2178,42 +1744,8 @@ function DrawingSheetsEditor({ sheets, onChange, kind }) {
         note: "Initial issue",
       }],
     }]);
-  const updateSheet = (i, patch) => onChange(sheets.map((s, ii) => (ii === i ? { ...s, ...patch } : s)));
-  const removeSheet = (i) => onChange(sheets.filter((_, ii) => ii !== i));
-  const toggleRevs = (i) => setExpandedRevs((prev) => ({ ...prev, [i]: !prev[i] }));
-
-  const addRevision = (i) => {
-    const s = sheets[i];
-    const revs = s.revisions || [];
-    const lastLetter = revs.length ? String(revs[revs.length - 1].letter || "A") : "@";
-    const nextLetter = String.fromCharCode(lastLetter.charCodeAt(0) + 1);
-    const newRev = {
-      id: crypto.randomUUID?.() || String(Date.now()),
-      letter: nextLetter,
-      date: new Date().toISOString().slice(0, 10),
-      note: "",
-    };
-    updateSheet(i, {
-      revisions: [...revs, newRev],
-      current_revision: nextLetter,
-    });
-  };
-
-  const updateRevision = (si, ri, patch) => {
-    const s = sheets[si];
-    const revs = (s.revisions || []).map((r, i) => (i === ri ? { ...r, ...patch } : r));
-    updateSheet(si, { revisions: revs });
-  };
-
-  const removeRevision = (si, ri) => {
-    const s = sheets[si];
-    const revs = (s.revisions || []).filter((_, i) => i !== ri);
-    const patch = { revisions: revs };
-    if (s.current_revision && !revs.find((r) => r.letter === s.current_revision)) {
-      patch.current_revision = revs.length ? revs[revs.length - 1].letter : "-";
-    }
-    updateSheet(si, patch);
-  };
+  const updateSheet = (i, patch) => onChange((sheets || []).map((s, ii) => (ii === i ? { ...s, ...patch } : s)));
+  const removeSheet = (i) => onChange((sheets || []).filter((_, ii) => ii !== i));
 
   const upload = async (i, file) => {
     if (!file) return;
@@ -2222,7 +1754,7 @@ function DrawingSheetsEditor({ sheets, onChange, kind }) {
       const res = await adminApi.uploadImage(file, `quote-${kind}`);
       updateSheet(i, { image_url: res.url });
       toast.success("Uploaded");
-    } catch (e) {
+    } catch {
       toast.error("Upload failed");
     } finally {
       setUploading(null);
@@ -2232,126 +1764,41 @@ function DrawingSheetsEditor({ sheets, onChange, kind }) {
   return (
     <div className="space-y-3">
       {(sheets || []).map((s, i) => (
-        <div key={s.id || i} className="rounded-xl border border-black/10 bg-white overflow-hidden" data-testid={`cq-${kind}-${i}`}>
+        <div key={s.id || i} className="rounded-xl border border-black/10 bg-white overflow-hidden">
           <div className="grid grid-cols-12 gap-3 p-3 items-start">
-            {/* Image preview / upload */}
             <div className="col-span-4">
               {s.image_url ? (
                 <div className="relative">
                   <img src={s.image_url.startsWith("http") ? s.image_url : `${window.location.origin}${s.image_url}`} alt={s.title} className="w-full h-40 object-contain bg-brand-bg rounded-lg" />
-                  <button
-                    onClick={() => updateSheet(i, { image_url: "" })}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 grid place-items-center text-red-500 hover:bg-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <button onClick={() => updateSheet(i, { image_url: "" })} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 grid place-items-center text-red-500 hover:bg-white"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
                 <label className="w-full h-40 rounded-lg border-2 border-dashed border-black/15 grid place-items-center cursor-pointer hover:border-brand-orange text-brand-navy/50 text-xs bg-brand-bg/30">
-                  {uploading === i ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-brand-orange" />
-                  ) : (
-                    <span>Click to upload drawing</span>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => upload(i, e.target.files?.[0])}
-                  />
+                  {uploading === i ? <Loader2 className="w-5 h-5 animate-spin text-brand-orange" /> : <span>Click to upload drawing</span>}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(i, e.target.files?.[0])} />
                 </label>
               )}
             </div>
-            {/* Fields */}
             <div className="col-span-8 grid grid-cols-2 gap-2">
               <input value={s.title || ""} onChange={(e) => updateSheet(i, { title: e.target.value })} className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-sm font-semibold" placeholder="Sheet title" />
               <input value={s.sheet_number || ""} onChange={(e) => updateSheet(i, { sheet_number: e.target.value })} className="rounded border border-black/10 bg-white px-2 py-1.5 text-xs" placeholder="Sheet No." />
               <input value={s.scale || ""} onChange={(e) => updateSheet(i, { scale: e.target.value })} className="rounded border border-black/10 bg-white px-2 py-1.5 text-xs" placeholder="Scale (e.g. 1:100)" />
-              <input value={s.units || ""} onChange={(e) => updateSheet(i, { units: e.target.value })} className="rounded border border-black/10 bg-white px-2 py-1.5 text-xs" placeholder="Units (mm/ft/inches)" />
-              <input value={s.drawn_by || ""} onChange={(e) => updateSheet(i, { drawn_by: e.target.value })} className="rounded border border-black/10 bg-white px-2 py-1.5 text-xs" placeholder="Drawn by" />
-              <input value={s.north_direction || ""} onChange={(e) => updateSheet(i, { north_direction: e.target.value })} className="rounded border border-black/10 bg-white px-2 py-1.5 text-xs" placeholder="North direction" />
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-brand-navy/60 font-semibold">Current Rev:</span>
-                <input value={s.current_revision || "-"} onChange={(e) => updateSheet(i, { current_revision: e.target.value })} className="w-14 rounded border border-black/10 bg-white px-2 py-1 text-xs font-bold text-center" />
-              </div>
-              <textarea value={s.notes || ""} onChange={(e) => updateSheet(i, { notes: e.target.value })} rows={2} className="col-span-2 rounded border border-black/10 bg-white px-2 py-1.5 text-xs resize-y" placeholder="Notes / revision info" />
             </div>
           </div>
-
-          {/* Revisions history */}
-          <div className="border-t border-black/5 bg-brand-bg/30 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => toggleRevs(i)}
-              className="w-full flex items-center justify-between text-left"
-              data-testid={`cq-${kind}-${i}-toggle-revs`}
-            >
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-navy">
-                <History className="w-3.5 h-3.5 text-brand-orange" />
-                Revision History ({(s.revisions || []).length})
-              </div>
-              {expandedRevs[i] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-            {expandedRevs[i] && (
-              <div className="mt-2 space-y-1.5" data-testid={`cq-${kind}-${i}-revs`}>
-                {(s.revisions || []).map((r, ri) => (
-                  <div key={r.id || ri} className="grid grid-cols-12 gap-2 items-center">
-                    <input
-                      value={r.letter || ""}
-                      onChange={(e) => updateRevision(i, ri, { letter: e.target.value.toUpperCase().slice(0, 3) })}
-                      className="col-span-1 rounded border border-black/10 bg-white px-2 py-1 text-xs font-bold text-center"
-                      placeholder="A"
-                    />
-                    <input
-                      type="date"
-                      value={r.date || ""}
-                      onChange={(e) => updateRevision(i, ri, { date: e.target.value })}
-                      className="col-span-3 rounded border border-black/10 bg-white px-2 py-1 text-xs"
-                    />
-                    <input
-                      value={r.note || ""}
-                      onChange={(e) => updateRevision(i, ri, { note: e.target.value })}
-                      className="col-span-7 rounded border border-black/10 bg-white px-2 py-1 text-xs"
-                      placeholder="Change description (e.g. Kitchen layout revised)"
-                    />
-                    <button
-                      onClick={() => removeRevision(i, ri)}
-                      className="col-span-1 w-6 h-6 rounded-full grid place-items-center hover:bg-red-50 text-red-500 mx-auto"
-                      aria-label="Delete revision"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => addRevision(i)}
-                  data-testid={`cq-${kind}-${i}-add-rev`}
-                  className="inline-flex items-center gap-1 rounded-full bg-brand-orange text-white px-3 py-1 text-[10px] font-semibold hover:brightness-95"
-                >
-                  <Plus className="w-3 h-3" /> Add Revision
-                </button>
-              </div>
-            )}
-          </div>
-
           <div className="px-3 py-2 border-t border-black/5 flex items-center justify-end">
             <button onClick={() => removeSheet(i)} className="text-xs text-red-500 hover:underline">Remove sheet</button>
           </div>
         </div>
       ))}
-      <button onClick={addSheet} data-testid={`cq-add-${kind}-btn`} className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold">
+      <button onClick={addSheet} className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold">
         <Plus className="w-3.5 h-3.5" /> Add {kind === "floor-plan" ? "Floor Plan" : "Elevation"} Sheet
       </button>
     </div>
   );
 }
 
-
-// ---------- Visual Boards Editor ----------
 function VisualBoardsEditor({ boards, onChange }) {
   const [uploading, setUploading] = useState(null);
-  const [generating, setGenerating] = useState(null);
-  const [prompts, setPrompts] = useState({});
 
   const addBoard = () =>
     onChange([...(boards || []), {
@@ -2360,8 +1807,8 @@ function VisualBoardsEditor({ boards, onChange }) {
       description: "",
       images: [],
     }]);
-  const updateBoard = (i, patch) => onChange(boards.map((b, ii) => (ii === i ? { ...b, ...patch } : b)));
-  const removeBoard = (i) => onChange(boards.filter((_, ii) => ii !== i));
+  const updateBoard = (i, patch) => onChange((boards || []).map((b, ii) => (ii === i ? { ...b, ...patch } : b)));
+  const removeBoard = (i) => onChange((boards || []).filter((_, ii) => ii !== i));
 
   const addImageFromUpload = async (bi, file) => {
     if (!file) return;
@@ -2369,11 +1816,7 @@ function VisualBoardsEditor({ boards, onChange }) {
     try {
       const res = await adminApi.uploadImage(file, "quote-visuals");
       updateBoard(bi, {
-        images: [...(boards[bi].images || []), {
-          id: crypto.randomUUID?.() || String(Date.now()),
-          url: res.url,
-          caption: "",
-        }],
+        images: [...(boards[bi].images || []), { id: crypto.randomUUID?.() || String(Date.now()), url: res.url, caption: "" }],
       });
       toast.success("Uploaded");
     } catch {
@@ -2383,114 +1826,105 @@ function VisualBoardsEditor({ boards, onChange }) {
     }
   };
 
-  const generateAiImage = async (bi) => {
-    const p = (prompts[bi] || "").trim();
-    if (!p) {
-      toast.error("Enter a prompt first");
-      return;
-    }
-    setGenerating(`${bi}`);
-    try {
-      const res = await adminApi.generateImage(p);
-      updateBoard(bi, {
-        images: [...(boards[bi].images || []), {
-          id: crypto.randomUUID?.() || String(Date.now()),
-          url: res.url,
-          caption: p.slice(0, 80),
-          ai_prompt: p,
-        }],
-      });
-      setPrompts({ ...prompts, [bi]: "" });
-      toast.success("Image generated");
-    } catch (e) {
-      const detail = e?.response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : "Generation failed");
-    } finally {
-      setGenerating(null);
-    }
-  };
-
-  const removeImage = (bi, ii) => {
-    updateBoard(bi, { images: (boards[bi].images || []).filter((_, i) => i !== ii) });
-  };
-  const updateCaption = (bi, ii, caption) => {
-    updateBoard(bi, {
-      images: boards[bi].images.map((img, i) => (i === ii ? { ...img, caption } : img)),
-    });
-  };
-
   return (
     <div className="space-y-4">
       {(boards || []).map((b, bi) => (
-        <div key={b.id || bi} className="rounded-xl border border-black/10 bg-white overflow-hidden" data-testid={`cq-visual-board-${bi}`}>
+        <div key={b.id || bi} className="rounded-xl border border-black/10 bg-white overflow-hidden">
           <div className="p-3 border-b border-black/5 flex items-center gap-2">
             <input value={b.title || ""} onChange={(e) => updateBoard(bi, { title: e.target.value })} className="flex-1 font-semibold text-brand-navy bg-transparent focus:outline-none" placeholder="Board title" />
             <button onClick={() => removeBoard(bi)} className="w-7 h-7 rounded-full grid place-items-center hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
           <div className="p-3 space-y-3">
-            <textarea value={b.description || ""} onChange={(e) => updateBoard(bi, { description: e.target.value })} rows={2} className="w-full rounded border border-black/10 bg-white px-2 py-1.5 text-xs resize-y" placeholder="What is this board about?" />
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-3.5 py-1.5 text-xs font-semibold cursor-pointer hover:brightness-110">
-                {uploading === `${bi}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Upload image
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => addImageFromUpload(bi, e.target.files?.[0])} />
-              </label>
-              <div className="flex items-center gap-1 flex-1 min-w-0">
-                <input
-                  value={prompts[bi] || ""}
-                  onChange={(e) => setPrompts({ ...prompts, [bi]: e.target.value })}
-                  className="flex-1 min-w-0 rounded border border-black/10 bg-white px-2 py-1.5 text-xs"
-                  placeholder="AI prompt (e.g. modern 3BHK living room with warm lighting)"
-                />
-                <button
-                  onClick={() => generateAiImage(bi)}
-                  disabled={generating === `${bi}`}
-                  data-testid={`cq-vb-generate-${bi}`}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-3.5 py-1.5 text-xs font-semibold hover:brightness-95 disabled:opacity-60 whitespace-nowrap"
-                >
-                  {generating === `${bi}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                  {generating === `${bi}` ? "Generating..." : "AI Generate"}
-                </button>
-              </div>
-            </div>
-
+            <label className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-3.5 py-1.5 text-xs font-semibold cursor-pointer hover:brightness-110">
+              {uploading === `${bi}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Upload image
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => addImageFromUpload(bi, e.target.files?.[0])} />
+            </label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {(b.images || []).map((img, ii) => (
                 <div key={img.id || ii} className="relative group">
                   <img src={img.url.startsWith("http") ? img.url : `${window.location.origin}${img.url}`} alt={img.caption || ""} className="w-full h-28 object-cover rounded-lg" />
-                  <button onClick={() => removeImage(bi, ii)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 grid place-items-center text-red-500"><X className="w-3.5 h-3.5" /></button>
-                  <input value={img.caption || ""} onChange={(e) => updateCaption(bi, ii, e.target.value)} className="w-full mt-1 rounded border border-black/10 bg-white px-2 py-1 text-[10px]" placeholder="Caption" />
                 </div>
               ))}
-              {(b.images || []).length === 0 && (
-                <div className="col-span-full text-xs text-brand-navy/50 italic p-3">No images yet.</div>
-              )}
             </div>
           </div>
         </div>
       ))}
-      <button onClick={addBoard} data-testid="cq-add-visual-board-btn" className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold">
+      <button onClick={addBoard} className="inline-flex items-center gap-1.5 rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold">
         <Plus className="w-3.5 h-3.5" /> Add Visual Board
       </button>
     </div>
   );
 }
 
-// ---------- Interior Library Picker Modal ----------
+function SpecCategoryEditor({ categories, onChange, isInterior = false }) {
+  const addCat = () => onChange([...(categories || []), { name: "New Category", icon: null, items: [] }]);
+  const updateCat = (idx, patch) => onChange((categories || []).map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  const removeCat = (idx) => onChange((categories || []).filter((_, i) => i !== idx));
+
+  return (
+    <div className="space-y-3">
+      {(categories || []).map((cat, ci) => (
+        <div key={ci} className="rounded-xl border border-black/10 bg-brand-bg/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <input value={cat.name || ""} onChange={(e) => updateCat(ci, { name: e.target.value })} className="flex-1 font-semibold text-brand-navy bg-transparent" />
+            <button onClick={() => removeCat(ci)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        </div>
+      ))}
+      <button onClick={addCat} className="rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"><Plus className="w-3.5 h-3.5 inline mr-1" /> Add Category</button>
+    </div>
+  );
+}
+
+function AddOnEditor({ items, onChange }) {
+  const add = () => onChange([...(items || []), { name: "", description: "", price: 0, unit: "" }]);
+  const update = (i, patch) => onChange((items || []).map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
+  const remove = (i) => onChange((items || []).filter((_, ii) => ii !== i));
+
+  return (
+    <div className="space-y-2">
+      {(items || []).map((it, i) => (
+        <div key={i} className="flex gap-2">
+          <input value={it.name || ""} onChange={(e) => update(i, { name: e.target.value })} className="rounded border px-2 py-1 text-xs flex-1" placeholder="Addon name" />
+          <input type="number" value={it.price || 0} onChange={(e) => update(i, { price: e.target.value })} className="rounded border px-2 py-1 text-xs w-24" placeholder="Price" />
+          <button onClick={() => remove(i)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+        </div>
+      ))}
+      <button onClick={add} className="rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"><Plus className="w-3.5 h-3.5 inline mr-1" /> Add Add-on</button>
+    </div>
+  );
+}
+
+function LineItemEditor({ items, onChange }) {
+  const add = () => onChange([...(items || []), { name: "", description: "", amount: 0 }]);
+  const update = (i, patch) => onChange((items || []).map((it, ii) => (ii === i ? { ...it, ...patch } : it)));
+  const remove = (i) => onChange((items || []).filter((_, ii) => ii !== i));
+
+  return (
+    <div className="space-y-2">
+      {(items || []).map((it, i) => (
+        <div key={i} className="flex gap-2">
+          <input value={it.name || ""} onChange={(e) => update(i, { name: e.target.value })} className="rounded border px-2 py-1 text-xs flex-1" placeholder="Line item" />
+          <input type="number" value={it.amount || 0} onChange={(e) => update(i, { amount: e.target.value })} className="rounded border px-2 py-1 text-xs w-24" placeholder="Amount" />
+          <button onClick={() => remove(i)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+        </div>
+      ))}
+      <button onClick={add} className="rounded-full bg-brand-navy text-white px-4 py-1.5 text-xs font-semibold"><Plus className="w-3.5 h-3.5 inline mr-1" /> Add Line Item</button>
+    </div>
+  );
+}
+
 function InteriorLibraryPicker({ onClose, onAdd }) {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [activeCat, setActiveCat] = useState(null);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState({});     // {id: true}
-  const [overrides, setOverrides] = useState({});   // {id: {rate, quantity, notes}}
+  const [selected, setSelected] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminApi.interiorLibrary.categories()
-      .then((cats) => setCategories(cats || []))
-      .catch(() => setCategories([]));
+    adminApi.interiorLibrary.categories().then((cats) => setCategories(cats || [])).catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {
@@ -2502,185 +1936,45 @@ function InteriorLibraryPicker({ onClose, onAdd }) {
   }, [activeCat, query]);
 
   const toggle = (id) => setSelected((s) => ({ ...s, [id]: !s[id] }));
-  const patchOverride = (id, patch) =>
-    setOverrides((o) => ({ ...o, [id]: { ...(o[id] || {}), ...patch } }));
 
   const selectedItems = useMemo(
-    () =>
-      items
-        .filter((it) => selected[it.id])
-        .map((it) => {
-          const ov = overrides[it.id] || {};
-          return {
-            ...it,
-            rate: ov.rate !== undefined && ov.rate !== "" ? Number(ov.rate) : it.rate,
-            default_quantity:
-              ov.quantity !== undefined && ov.quantity !== "" ? Number(ov.quantity) : it.default_quantity,
-            notes: ov.notes !== undefined ? ov.notes : it.notes,
-          };
-        }),
-    [items, selected, overrides]
+    () => items.filter((it) => selected[it.id]),
+    [items, selected]
   );
-
-  const selectedCount = selectedItems.length;
-  const selectedTotal = useMemo(
-    () => selectedItems.reduce((s, it) => s + (Number(it.rate) || 0) * (Number(it.default_quantity) || 1), 0),
-    [selectedItems]
-  );
-
-  const addSelected = () => {
-    if (selectedItems.length === 0) return;
-    onAdd(selectedItems);
-  };
 
   return (
-    <div className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-[60] grid place-items-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden" data-testid="cq-library-picker">
+    <div className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-[60] grid place-items-center p-4 font-['Poppins']">
+      <div className="bg-white rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
         <div className="p-5 border-b border-black/5 flex items-center justify-between">
-          <div>
-            <div className="section-eyebrow">Interior Library</div>
-            <div className="font-bold text-brand-navy text-lg inline-flex items-center gap-2">
-              <PackageOpen className="w-5 h-5 text-brand-orange" />
-              Pick items to add — edit rate &amp; qty inline
-            </div>
+          <div className="font-bold text-brand-navy text-lg flex items-center gap-2">
+            <PackageOpen className="w-5 h-5 text-brand-orange" /> Pick Interior Items
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-brand-bg text-brand-navy">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center hover:bg-brand-bg text-brand-navy"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-4 border-b border-black/5 flex items-center gap-3">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-full border border-black/10 px-4 py-2 text-sm" placeholder="Search items..." />
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {loading ? <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-orange" /></div> :
+            items.map((it) => (
+              <div key={it.id} onClick={() => toggle(it.id)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${selected[it.id] ? "border-brand-orange bg-brand-orange/5" : "border-black/10 bg-white"}`}>
+                <div>
+                  <div className="font-bold text-sm text-brand-navy">{it.name}</div>
+                  <div className="text-xs text-brand-navy/60">{it.category} • ₹{it.rate}</div>
+                </div>
+                <input type="checkbox" checked={!!selected[it.id]} readOnly className="accent-brand-orange w-4 h-4" />
+              </div>
+            ))
+          }
+        </div>
+
+        <div className="p-4 border-t border-black/5 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 border rounded-full text-xs font-bold">Cancel</button>
+          <button onClick={() => { onAdd(selectedItems); onClose(); }} disabled={selectedItems.length === 0} className="px-5 py-2 bg-brand-orange text-white rounded-full text-xs font-bold disabled:opacity-50">
+            Add {selectedItems.length} Items
           </button>
-        </div>
-
-        <div className="p-4 border-b border-black/5 flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 text-brand-navy/40 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-full border border-black/10 bg-white pl-9 pr-3 py-2 text-sm"
-              placeholder="Search items or brands..."
-              data-testid="cq-lib-search"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              onClick={() => setActiveCat(null)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${!activeCat ? "bg-brand-navy text-white" : "bg-brand-bg text-brand-navy/70 hover:bg-brand-bg/80"}`}
-            >All</button>
-            {categories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setActiveCat(c)}
-                data-testid={`cq-lib-cat-${c}`}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${activeCat === c ? "bg-brand-navy text-white" : "bg-brand-bg text-brand-navy/70 hover:bg-brand-bg/80"}`}
-              >{c}</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading ? (
-            <div className="grid place-items-center h-full">
-              <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
-            </div>
-          ) : items.length === 0 ? (
-            <div className="text-center py-16 text-sm text-brand-navy/50">No items found. Try a different search.</div>
-          ) : (
-            <div className="space-y-2">
-              {items.map((it) => {
-                const on = !!selected[it.id];
-                const ov = overrides[it.id] || {};
-                const rateVal = ov.rate !== undefined ? ov.rate : it.rate;
-                const qtyVal = ov.quantity !== undefined ? ov.quantity : it.default_quantity;
-                const noteVal = ov.notes !== undefined ? ov.notes : (it.notes || "");
-                const lineTotal = (Number(rateVal) || 0) * (Number(qtyVal) || 1);
-                return (
-                  <div
-                    key={it.id}
-                    data-testid={`cq-lib-item-${it.id}`}
-                    className={`rounded-xl border p-3 transition ${on ? "border-brand-orange bg-brand-orange/5 ring-1 ring-brand-orange/40" : "border-black/10 bg-white hover:border-brand-navy/30"
-                      }`}
-                  >
-                    <div className="grid grid-cols-12 gap-3 items-start">
-                      <label className="col-span-1 flex items-center justify-center pt-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() => toggle(it.id)}
-                          className="w-4 h-4 accent-brand-orange"
-                          data-testid={`cq-lib-check-${it.id}`}
-                        />
-                      </label>
-                      <div className="col-span-4 min-w-0 cursor-pointer" onClick={() => toggle(it.id)}>
-                        <div className="text-[10px] uppercase tracking-widest text-brand-orange font-semibold">{it.category}</div>
-                        <div className="font-semibold text-brand-navy text-sm mt-0.5 truncate">{it.name}</div>
-                        {it.brand && <div className="text-xs text-brand-navy/60">{it.brand}</div>}
-                      </div>
-                      <div className="col-span-2">
-                        <div className="text-[10px] uppercase tracking-wider text-brand-navy/60 font-semibold mb-0.5">Rate (₹)</div>
-                        <input
-                          type="number"
-                          value={rateVal ?? 0}
-                          onChange={(e) => patchOverride(it.id, { rate: e.target.value })}
-                          onFocus={(e) => e.target.select()}
-                          className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs font-bold"
-                          data-testid={`cq-lib-rate-${it.id}`}
-                        />
-                        <div className="text-[10px] text-brand-navy/50 mt-0.5">{it.rate_unit || ""}</div>
-                      </div>
-                      <div className="col-span-1">
-                        <div className="text-[10px] uppercase tracking-wider text-brand-navy/60 font-semibold mb-0.5">Qty</div>
-                        <input
-                          type="number"
-                          value={qtyVal ?? 1}
-                          onChange={(e) => patchOverride(it.id, { quantity: e.target.value })}
-                          onFocus={(e) => e.target.select()}
-                          className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs"
-                          data-testid={`cq-lib-qty-${it.id}`}
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <div className="text-[10px] uppercase tracking-wider text-brand-navy/60 font-semibold mb-0.5">Notes</div>
-                        <input
-                          value={noteVal}
-                          onChange={(e) => patchOverride(it.id, { notes: e.target.value })}
-                          className="w-full rounded border border-black/10 bg-white px-2 py-1 text-xs"
-                          placeholder="Custom note (optional)"
-                        />
-                      </div>
-                      <div className="col-span-1 text-right pt-4">
-                        <div className="text-[10px] uppercase tracking-wider text-brand-navy/50">Line</div>
-                        <div className="text-sm font-bold text-brand-navy">₹{Math.round(lineTotal).toLocaleString("en-IN")}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-black/5 flex items-center justify-between bg-brand-bg/30">
-          <div className="text-sm">
-            <span className="text-brand-navy/70">{selectedCount} selected</span>
-            {selectedCount > 0 && (
-              <span className="ml-3 font-semibold text-brand-navy">
-                Est. total: ₹{Math.round(selectedTotal).toLocaleString("en-IN")}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-brand-navy"
-            >Cancel</button>
-            <button
-              onClick={addSelected}
-              disabled={selectedItems.length === 0}
-              data-testid="cq-lib-add-selected"
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange text-white px-5 py-2 text-sm font-semibold disabled:opacity-60"
-            >
-              <Plus className="w-4 h-4" /> Add {selectedItems.length || ""} to Quote
-            </button>
-          </div>
         </div>
       </div>
     </div>

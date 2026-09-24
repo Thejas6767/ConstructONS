@@ -1,33 +1,40 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Building2, Clock, Camera, ShieldCheck, CheckSquare, Hammer } from "lucide-react";
+import { FileText, Building2, Clock, Camera, ShieldCheck, CheckSquare, Hammer, Bot } from "lucide-react";
+import PortalProjectAdvisorModal from "../PortalProjectAdvisorModal";
 
 export default function DashboardBottomRow({ project }) {
+  const [showAdvisor, setShowAdvisor] = useState(false);
   const isHandoverComplete = project?.stages?.some(s => s.name.toLowerCase().includes("handover") && s.status === "completed");
 
   return (
     <div className="font-['Poppins']">
       
-      {/* Quick Vaults Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mt-6">
+      {/* Quick Vaults & Actions Grid (5 Tiles) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-4 mt-6">
+        
+        {/* 1. Approvals */}
         <Link to="/portal/approvals" className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col items-center justify-center text-center hover:bg-amber-100 transition shadow-sm group">
           <CheckSquare className="w-5 h-5 text-amber-600 mb-2 group-hover:scale-110 transition" />
           <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">Action Center</span>
           <span className="text-[9px] font-bold text-amber-600 mt-1">Approvals</span>
         </Link>
 
+        {/* 2. Documents */}
         <Link to="/portal/documents" className="rounded-xl border border-black/10 bg-white p-4 flex flex-col items-center justify-center text-center hover:bg-[#F2F2F2] transition shadow-sm group">
           <FileText className="w-5 h-5 text-purple-600 mb-2 group-hover:scale-110 transition" />
           <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">Document Vault</span>
           <span className="text-[9px] font-bold text-[#111111]/50 mt-1">{(project?.documents || []).length} Files</span>
         </Link>
 
+        {/* 3. Quality */}
         <Link to="/portal/quality" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center justify-center text-center hover:bg-emerald-100 transition shadow-sm group">
           <ShieldCheck className="w-5 h-5 text-emerald-700 mb-2 group-hover:scale-110 transition" />
           <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">Quality Control</span>
           <span className="text-[9px] font-bold text-emerald-700 mt-1">{(project?.quality_inspections || []).length} Audits</span>
         </Link>
 
+        {/* 4. Maintenance */}
         {isHandoverComplete ? (
           <Link to="/portal/maintenance" className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex flex-col items-center justify-center text-center hover:bg-blue-100 transition shadow-sm group">
             <Hammer className="w-5 h-5 text-blue-600 mb-2 group-hover:scale-110 transition" />
@@ -41,7 +48,26 @@ export default function DashboardBottomRow({ project }) {
             <span className="text-[9px] font-semibold text-[#FF5A00] mt-1">Unlocks at Handover</span>
           </div>
         )}
+
+        {/* 5. AI Project Advisor Module */}
+        <button
+          onClick={() => setShowAdvisor(true)}
+          className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex flex-col items-center justify-center text-center hover:bg-indigo-100 transition shadow-sm group cursor-pointer"
+        >
+          <Bot className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition" />
+          <span className="text-[10px] font-bold text-[#000F1B] uppercase tracking-wider">AI Advisor</span>
+          <span className="text-[9px] font-bold text-indigo-600 mt-1">Project Q&A</span>
+        </button>
+
       </div>
+
+      {/* Portal AI Advisor Modal Window */}
+      {showAdvisor && (
+        <PortalProjectAdvisorModal 
+          project={project} 
+          onClose={() => setShowAdvisor(false)} 
+        />
+      )}
 
       {/* Footer Ribbon */}
       <div className="mt-8 pt-4 border-t border-black/5 flex flex-wrap items-center justify-between gap-4">
